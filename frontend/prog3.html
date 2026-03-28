@@ -1,0 +1,2023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>EpiSpot - Epidemic Predictor Dashboard</title>
+
+    <!-- Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+
+    <!-- TensorFlow.js and Universal Sentence Encoder (fallback ML in browser) -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.12.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder@1.3.3/dist/universal-sentence-encoder.min.js"></script>
+
+    <!-- html2pdf for PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.2/html2pdf.bundle.min.js"></script>
+
+    <!-- Leaflet for real interactive map -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+
+    <style>
+        :root {
+            --color-primary: #1e3a8a;
+            --color-secondary: #06b6d4;
+            --color-text: #e2e8f0;
+            --color-bg-dark: #0f172a;
+            --color-bg-card: #1e293b;
+            --color-danger: #ef4444;
+            --color-success: #22c55e;
+            --color-warning: #facc15;
+            --font-family: 'Inter', sans-serif;
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.12), 0 2px 4px -2px rgba(0,0,0,0.12);
+        }
+
+        html, body { height: 100%; }
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: var(--font-family);
+            background-color: var(--color-bg-dark);
+            color: var(--color-text);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            -webkit-font-smoothing:antialiased;
+            -moz-osx-font-smoothing:grayscale;
+        }
+
+        header {
+            background-color: var(--color-bg-card);
+            padding: 1rem 1.25rem;
+            box-shadow: var(--shadow-md);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 60;
+            border-bottom: 1px solid #0b1220;
+        }
+
+        .logo {
+            font-size: 1.4rem;
+            font-weight:700;
+            color:var(--color-secondary);
+            text-transform:uppercase;
+            display:flex;
+            align-items:center;
+            gap:.5rem;
+        }
+
+        main { padding: 1.25rem; flex-grow:1; width:100%; box-sizing:border-box; }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.25rem;
+            grid-auto-rows: minmax(0, auto);
+        }
+
+        @media (min-width: 1100px) {
+            .dashboard-grid { grid-template-columns: 2fr 1fr; gap: 1.5rem; }
+        }
+
+        .card {
+            background-color: var(--Color-bg-card, var(--color-bg-card));
+            border-radius: 12px;
+            padding: 1.25rem;
+            box-shadow: var(--shadow-md);
+            border: 1px solid #334155;
+            transition: all .25s ease;
+            overflow: visible;
+        }
+
+        .card-header {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.9rem;
+            color: var(--color-secondary);
+            border-bottom: 1px solid #334155;
+            padding-bottom: 0.5rem;
+        }
+
+        input[type="text"], input[type="number"], select, textarea, button {
+            font-family: inherit;
+            font-size: 1rem;
+        }
+
+        .prediction-input input[type="text"],
+        .prediction-input select,
+        .prediction-input button,
+        .resource-input input[type="number"],
+        .resource-input select,
+        .diagnostic-suite textarea {
+            width: 100%;
+            padding: 0.75rem;
+            margin-bottom: 0.9rem;
+            border-radius: 8px;
+            border: 1px solid #475569;
+            background-color: #0f172a;
+            color: var(--color-text);
+            box-sizing: border-box;
+        }
+
+        .prediction-input button,
+        .resource-input button,
+        .diagnosis-controls button {
+            padding: 0.6rem 0.9rem;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 700;
+        }
+
+        .prediction-input button:hover,
+        .resource-input button:hover,
+        .diagnosis-controls button:hover {
+            transform: translateY(-1px);
+        }
+
+        #prediction-output {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 8px;
+            border-left: 5px solid var(--color-secondary);
+            background-color: #1e293b;
+            min-height: 100px;
+        }
+
+        #prediction-citations {
+            margin-top: 0.75rem;
+            padding: 0.5rem;
+            font-size: 0.78rem;
+            color: #94a3b8;
+            border-top: 1px dashed #334155;
+        }
+
+        .risk-level { font-size: 1.25rem; font-weight: 700; margin-top: 0.5rem; }
+        .risk-low{ color:var(--color-success);}
+        .risk-medium{ color:var(--color-warning);}
+        .risk-high{ color:var(--color-danger);}
+
+        .tab-controls {
+            display:flex;
+            gap: .35rem;
+            border-bottom: 2px solid #334155;
+            margin-bottom: 1rem;
+            padding-bottom: .25rem;
+            position: relative;
+            z-index: 40;
+            background: linear-gradient(180deg, rgba(15,23,42,0.00), rgba(15,23,42,0.00));
+        }
+
+        .tab-button {
+            padding: 0.6rem 1rem;
+            border: none;
+            background-color: transparent;
+            color: var(--color-text);
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 600;
+            border-bottom: 3px solid transparent;
+            transition: all .14s ease;
+            border-radius: 6px 6px 0 0;
+            margin-right: 2px;
+            z-index: 50;
+            position: relative;
+        }
+
+        .tab-button.active {
+            color: var(--color-secondary);
+            border-bottom-color: var(--color-secondary);
+            background-color: rgba(6,182,212,0.03);
+        }
+
+        .tab-content { display: none; padding-top: 0.25rem; }
+        .tab-content.active { display: block; }
+
+        .map-container {
+            min-height: 250px;
+            background-color: #0f172a;
+            border: 1px solid #475569;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            margin-top: 0.9rem;
+            padding: 0;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #india-map {
+            width: 100%;
+            height: 320px;
+            border-radius: 8px 8px 0 0;
+            z-index: 1;
+        }
+
+        .india-map-legend {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.8rem;
+            color: #cbd5e1;
+            background: rgba(15,23,42,0.96);
+            border-top: 1px solid #1f2937;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.75rem;
+            z-index: 2;
+        }
+
+        .legend-badges {
+            display:flex;
+            gap:0.4rem;
+            align-items:center;
+            flex-wrap:wrap;
+        }
+
+        .legend-pill {
+            display:inline-flex;
+            align-items:center;
+            gap:0.25rem;
+            padding:0.15rem 0.5rem;
+            border-radius:999px;
+            font-size:0.75rem;
+            background:#020617;
+            border:1px solid #1e293b;
+        }
+
+        .legend-swatch {
+            width:10px;
+            height:10px;
+            border-radius:999px;
+        }
+
+        .data-table {
+            width:100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .data-table th, .data-table td {
+            padding: .6rem;
+            text-align: left;
+            border-bottom:1px solid #334155;
+            font-size: .92rem;
+        }
+
+        .data-table th {
+            background-color:#1e293b;
+            color:var(--color-secondary);
+            font-weight:700;
+            text-transform:uppercase;
+            font-size:.78rem;
+        }
+
+        .data-table tr:hover { background-color: #2b3746; }
+
+        .chart-grid { display:grid; grid-template-columns:1fr 1fr; gap: 18px; margin-top: 12px; }
+        .chart-container { background-color: #0f172a; border-radius: 8px; padding: 12px; box-shadow: inset 0 0 5px rgba(0,0,0,0.45); height: 320px; }
+
+        @media (max-width: 900px) {
+            .chart-grid { grid-template-columns: 1fr; }
+        }
+
+        .diagnostic-suite { display:block; width:100%; }
+        .diagnostic-row { display:flex; gap: 1rem; align-items:flex-start; width:100%; box-sizing:border-box; }
+        .diag-left { flex:2; min-width:0; }
+        .diag-right { flex:1; min-width:260px; }
+
+        .red-flag-banner {
+            background: linear-gradient(90deg, rgba(239,68,68,0.09), rgba(239,68,68,0.04));
+            border-left:4px solid var(--color-danger);
+            padding:0.75rem;
+            border-radius:8px;
+            margin-bottom:1rem;
+            color:var(--color-danger);
+            font-weight:700;
+            display:none;
+        }
+
+        .recommendation {
+            padding:.6rem;
+            border-radius:8px;
+            background:#081022;
+            border:1px solid #223148;
+            margin-bottom:.5rem;
+            font-size:0.95rem;
+        }
+
+        .diagnosis-controls { display:flex; gap:.5rem; flex-wrap:wrap; margin-top:0.25rem; }
+        .btn-primary { background:var(--color-primary); color:white; }
+        .btn-secondary { background:#334155; color:var(--color-text); }
+
+        .small-muted { color:#94a3b8; font-size:0.88rem; }
+
+        .diag-right .card { padding: 0.9rem; margin-bottom: 0.8rem; }
+
+        @media (max-width: 980px) {
+            .diagnostic-row { flex-direction: column; }
+            .diag-right { min-width: 100%; }
+            .diag-left { width: 100%; }
+            .tab-controls { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        }
+
+        footer {
+            padding: 0.9rem 1rem;
+            text-align:center;
+            border-top:1px solid #334155;
+            color:#94a3b8;
+            font-size:0.85rem;
+            background-color:var(--color-bg-card);
+            margin-top:1.25rem;
+        }
+
+        .resource-metric {
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            margin:0.3rem 0;
+            font-size:0.92rem;
+        }
+
+        .metric-label { color:#cbd5e1; }
+        .metric-value { font-weight:700; }
+
+        .hidden { display:none !important; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo"><i class="fas fa-microscope"></i> EpiSpot</div>
+        <nav aria-label="Main navigation"></nav>
+    </header>
+
+    <main>
+        <div class="dashboard-grid">
+
+            <!-- Prediction Panel -->
+            <div class="card" id="prediction-panel">
+                <div class="card-header">
+                    <i class="fas fa-chart-line"></i> Global Epidemic Prediction Model (Live COVID Data)
+                </div>
+
+                <div class="prediction-input">
+                    <label for="location-input">Target Region</label>
+                    <input type="text" id="location-input" placeholder="e.g., Global, India, India - Maharashtra, United States" />
+
+                    <label for="disease-type-input">Disease Type Focus</label>
+                    <select id="disease-type-input">
+                        <option value="covid-variants">COVID-19 / Variants (live data)</option>
+                        <option value="all">Generalised Respiratory / Infectious Risk (COVID proxy)</option>
+                        <option value="influenza">Influenza Strain (Flu) — uses COVID data as proxy</option>
+                        <option value="dengue">Dengue Fever — requires custom backend</option>
+                        <option value="cholera">Cholera Outbreaks — requires custom backend</option>
+                    </select>
+
+                    <label for="data-period-input">Historical Context Window (Years)</label>
+                    <input type="number" id="data-period-input" value="3" min="1" max="10" />
+
+                    <div style="display:flex; gap:.5rem; flex-wrap:wrap;">
+                        <button onclick="runPrediction()" class="btn-primary" style="display:inline-flex; align-items:center; gap:.5rem;">
+                            <i class="fas fa-play"></i> Run Prediction Analysis
+                        </button>
+                        <button onclick="runResourceForecast()" class="btn-secondary" style="display:inline-flex; align-items:center; gap:.5rem;">
+                            <i class="fas fa-clipboard-check"></i> Quick Resource Forecast
+                        </button>
+                    </div>
+                </div>
+
+                <div id="prediction-output">
+                    <p>Connects to public epidemic APIs and computes a risk score. Outputs will appear here.</p>
+                    <div class="risk-level risk-low" id="risk-display" style="display:none;"></div>
+                </div>
+                <div id="prediction-citations"></div>
+            </div>
+
+            <!-- AI Symptom Diagnostic Suite -->
+            <div class="card" id="symptom-checker-panel">
+                <div class="card-header"><i class="fas fa-stethoscope"></i> AI Symptom Diagnostic Suite (Demo, Not Medical Advice)</div>
+
+                <p style="color:#94a3b8; margin-bottom: .75rem;">
+                    Uses a backend BERT model (if available) plus an in-browser Universal Sentence Encoder fallback
+                    to rank likely conditions. <strong>Not a real diagnosis.</strong> Educational demo only.
+                </p>
+
+                <div class="diagnostic-suite" aria-labelledby="symptom-checker-panel">
+                    <div class="diagnostic-row">
+                        <div class="diag-left">
+                            <label for="symptom-input" style="font-weight:600;">Symptoms</label>
+                            <textarea id="symptom-input" placeholder="e.g., high fever, cough, shortness of breath, and chest pain." style="width:100%; height:150px; padding:1rem; border-radius:8px; border:1px solid #475569; background:#0f172a; color:white; resize:vertical;"></textarea>
+
+                            <div class="diagnosis-controls" role="toolbar" aria-label="Diagnostic controls">
+                                <button id="train-ml-btn" class="btn-secondary" onclick="startTraining()" title="Load USE and train the small classifier (demo)">
+                                    <i class="fas fa-robot"></i> Load & Train ML
+                                </button>
+                                <button id="run-dx-btn" class="btn-primary" onclick="runDiagnosis()" title="Run the diagnosis using backend ML (if available) or in-browser fallback">
+                                    <i class="fas fa-heartbeat"></i> Run Diagnosis
+                                </button>
+                                <button id="download-report-btn" class="btn-secondary" onclick="downloadDiagnosisReport()" title="Export the last diagnosis as a PDF">
+                                    <i class="fas fa-file-download"></i> Download Report
+                                </button>
+                            </div>
+
+                            <div id="ml-status" style="margin-top:.5rem;" class="small-muted">
+                                ML model status: <span id="ml-status-text">Not loaded (frontend fallback only)</span>
+                            </div>
+
+                            <div id="red-flag-banner" class="red-flag-banner" role="alert" aria-live="polite"></div>
+
+                            <div id="diagnosis-summary" style="margin-top:1rem; padding:1rem; border-radius:8px; background:#081122; border:1px solid #223148;">
+                                <h4 style="margin:0 0 .5rem 0;">Diagnosis Summary</h4>
+                                <div id="diag-top-result" style="margin-bottom:.5rem; color:#cbd5e1;">No diagnosis yet.</div>
+                                <div id="diag-timeline" class="small-muted"></div>
+                            </div>
+                        </div>
+
+                        <div class="diag-right">
+                            <div class="card" style="padding:0.85rem; margin-bottom:.8rem;">
+                                <div class="card-header" style="border-bottom:none; margin-bottom:.5rem; padding-bottom:0;">Probability Breakdown</div>
+                                <div style="height:220px;">
+                                    <canvas id="probChart"></canvas>
+                                </div>
+                            </div>
+
+                            <div class="card" style="padding:0.85rem; margin-bottom:.8rem;">
+                                <div class="card-header" style="border-bottom:none; margin-bottom:.5rem; padding-bottom:0;">Severity Gauge</div>
+                                <div style="height:180px;">
+                                    <canvas id="severity-gauge"></canvas>
+                                </div>
+                                <div id="severity-text" style="text-align:center; margin-top:.4rem; color:#94a3b8;">Score: N/A</div>
+                            </div>
+
+                            <div class="card" style="padding:0.85rem;">
+                                <div class="card-header" style="border-bottom:none; margin-bottom:.5rem; padding-bottom:0;">Recommendations</div>
+                                <div id="recommendations-list" style="min-height:64px;">
+                                    <p class="small-muted">Run a diagnosis to view tailored, educational recommendations.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Regional Data & Tabs -->
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-header"><i class="fas fa-map-marked-alt"></i> Regional Data and Analyzer</div>
+
+                <div class="tab-controls" role="tablist" aria-label="Regional tabs">
+                    <button class="tab-button active" onclick="showTab('india-hotspots')" role="tab" aria-selected="true">India Hotspots (Live COVID)</button>
+                    <button class="tab-button" onclick="showTab('global-trends')" role="tab">Global Trends</button>
+                    <button class="tab-button" onclick="showTab('data-analyzer')" role="tab">Data Analyzer (CSV)</button>
+                    <button class="tab-button" onclick="showTab('resource-planning')" role="tab">Resource Planning</button>
+                </div>
+
+                <!-- India Hotspots -->
+                <div id="india-hotspots" class="tab-content active" role="tabpanel">
+                    <div style="margin-bottom: 0.75rem;">
+                        <label for="hotspot-disease-select" style="font-weight: 500;">
+                            Select Disease for Hotspot View
+                            <span style="display:block; font-size:0.78rem; color:#94a3b8; font-weight:400;">
+                                COVID-19 uses live state data via incovid19.org.
+                                Other diseases are loaded from <strong>your FastAPI backend</strong>.
+                            </span>
+                        </label>
+                        <select id="hotspot-disease-select" onchange="updateHotspotData(this.value)" style="padding:0.5rem; border-radius:6px; border:1px solid #475569; background-color:#1e293b; color:var(--color-text); margin-top:0.5rem;">
+                            <option value="covid">COVID-19 (Live API)</option>
+                            <option value="dengue">Dengue Fever (Backend)</option>
+                            <option value="malaria">Malaria (Backend)</option>
+                            <option value="chikungunya">Chikungunya (Backend)</option>
+                            <option value="h1n1">H1N1 (Backend)</option>
+                        </select>
+                    </div>
+
+                    <div class="map-container">
+                        <div id="india-map"></div>
+                        <div class="india-map-legend">
+                            <div class="legend-badges">
+                                <span class="legend-pill"><span class="legend-swatch" style="background:var(--color-danger);"></span> High active burden</span>
+                                <span class="legend-pill"><span class="legend-swatch" style="background:var(--color-warning);"></span> Medium</span>
+                                <span class="legend-pill"><span class="legend-swatch" style="background:var(--color-success);"></span> Low</span>
+                                <span class="legend-pill"><span class="legend-swatch" style="background:#4b5563;"></span> No data</span>
+                            </div>
+                            <span style="font-size:0.75rem; color:#9ca3af;">Source: incovid19.org (COVID-19) + your backend (other diseases)</span>
+                        </div>
+                    </div>
+
+                    <table class="data-table" aria-describedby="india-hotspots">
+                        <thead>
+                            <tr>
+                                <th>Region (State/UT)</th>
+                                <th>Current Risk Level</th>
+                                <th>Active Cases (Latest)</th>
+                                <th>New Cases (24h)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="hotspot-table-body"></tbody>
+                    </table>
+                    <div id="hotspot-error" class="small-muted" style="margin-top:0.5rem; color:var(--color-danger); display:none;"></div>
+                </div>
+
+                <!-- Global Trends -->
+                <div id="global-trends" class="tab-content" role="tabpanel">
+                    <h3 style="color: var(--color-text); margin-top: 0;">Global Incidence and R-Value Trends</h3>
+                    <p style="color: #94a3b8;">
+                        Select a disease. Time-series data is fetched from your FastAPI backend
+                        (which can talk to WHO / OWID / national APIs).
+                    </p>
+
+                    <label for="global-disease-select" style="font-size:0.9rem; color:#cbd5e1;">
+                        Disease:
+                    </label>
+                    <select id="global-disease-select" onchange="renderGlobalTrendChart()" style="margin-left:0.5rem; padding:0.25rem 0.5rem; border-radius:6px; border:1px solid #475569; background:#0f172a; color:#e5e7eb;">
+                        <option value="covid">COVID-19</option>
+                        <option value="dengue">Dengue</option>
+                        <option value="malaria">Malaria</option>
+                        <option value="chikungunya">Chikungunya</option>
+                    </select>
+
+                    <div class="chart-container" style="height:420px; position:relative; margin-top:0.75rem;">
+                        <div id="global-trend-loading" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:0.9rem; color:#cbd5e1;">
+                            <i class="fas fa-spinner fa-spin" style="margin-right:0.5rem;"></i> Loading live global time-series...
+                        </div>
+                        <canvas id="global-trend-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- CSV Analyzer -->
+                <div id="data-analyzer" class="tab-content" role="tabpanel">
+                    <h3 style="color: var(--color-secondary); margin-top: 0;">Analyze Historical CSV Data</h3>
+                    <p style="color:#94a3b8;">Upload a CSV file containing historical case data (Date, Cases, Deaths) for instant analysis and charts.</p>
+                    <input type="file" id="csv-file-input" accept=".csv" onchange="handleFileUpload(event)" style="padding:1rem; border:1px dashed #475569; border-radius:8px; width:100%; box-sizing:border-box; background-color:#0f172a; margin-bottom:1rem;">
+                    <div id="analysis-loading" style="display:none; text-align:center; color:var(--color-secondary); padding:1rem;">
+                        <i class="fas fa-spinner fa-spin fa-2x"></i>
+                        <p>Analyzing data and generating charts...</p>
+                    </div>
+                    <div id="analysis-error" style="display:none; text-align:center; color:var(--color-danger); padding:1rem;">
+                        <i class="fas fa-times-circle fa-2x"></i>
+                        <p id="error-message">An unknown error occurred.</p>
+                    </div>
+                    <div id="analysis-results" style="display:none;">
+                        <div class="card" style="padding:1rem; border-left:5px solid var(--color-secondary); margin-bottom:12px;">
+                            <div class="card-header" style="border-bottom:none; margin-bottom:0.5rem; padding-bottom:0;">
+                                <i class="fas fa-chart-bar"></i> Key Metrics Report
+                            </div>
+                            <div id="report-content"></div>
+                        </div>
+                        <h4 style="color: var(--color-text); margin-bottom:0.5rem;">Progression Charts</h4>
+                        <div class="chart-grid">
+                            <div class="chart-container"><canvas id="cases-progression-chart"></canvas></div>
+                            <div class="chart-container"><canvas id="deaths-progression-chart"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Resource Planning -->
+                <div id="resource-planning" class="tab-content" role="tabpanel">
+                    <h3 style="color: var(--color-secondary); margin-top: 0;"><i class="fas fa-truck-medical"></i> Emergency Resource Forecaster</h3>
+                    <p style="color: #94a3b8;">Uses epidemic forecasts from your backend plus local capacity inputs to estimate stress on beds and ventilators.</p>
+
+                    <div class="resource-planning-grid" style="display:grid; grid-template-columns:1fr 2fr; gap:12px;">
+                        <div class="resource-input">
+                            <h4 style="color: var(--color-text); margin-top: 0; border-bottom: 1px solid #334155; padding-bottom: 0.5rem;"><i class="fas fa-cogs"></i> Input Parameters</h4>
+                            <label for="beds-available">Current Hospital Bed Capacity</label>
+                            <input type="number" id="beds-available" value="5000" min="0">
+                            <label for="icu-occupancy">Current ICU Occupancy (%)</label>
+                            <input type="number" id="icu-occupancy" value="65" min="0" max="100">
+                            <label for="vent-inventory">Existing Ventilator Inventory</label>
+                            <input type="number" id="vent-inventory" value="300" min="0">
+                            <label for="forecast-duration">Forecast Duration (Days)</label>
+                            <select id="forecast-duration">
+                                <option value="30">30 Days</option>
+                                <option value="60">60 Days</option>
+                                <option value="90" selected>90 Days</option>
+                                <option value="180">180 Days</option>
+                            </select>
+                            <button onclick="runResourceForecast()" class="btn-primary" style="width:100%; margin-top:.5rem;"><i class="fas fa-clipboard-check"></i> Generate Forecast</button>
+                        </div>
+
+                        <div class="resource-output" style="padding:1rem; border-left:5px solid var(--color-warning); background:#1e293b; border-radius:8px;">
+                            <h4 style="color: var(--color-text); margin-top: 0; border-bottom: 1px solid #334155; padding-bottom: 0.25rem;"><i class="fas fa-chart-pie"></i> Projected Demand</h4>
+                            <div id="resource-forecast-output">
+                                <p style="color: #94a3b8; text-align: center; padding-top: 1rem;">Run the global prediction model first, then generate the resource forecast.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        EpiSpot &copy; 2024. Data from public APIs + your backend. Educational use only — not medical or public-health advice.
+    </footer>
+
+    <script>
+        /* ---- Backend base URL ---- */
+        const BACKEND_BASE_URL = "http://localhost:8000"; 
+        // change to your deployed FastAPI URL in production
+
+        /* ---- Shared chart config ---- */
+        let chartInstances = {};
+        const ChartConfig = {
+            darkGray: '#475569',
+            lightText: '#FFFFFF',
+            cyan: 'var(--color-secondary)',
+            red: 'var(--color-danger)',
+            yellow: 'var(--color-warning)',
+            whiteBlue: '#c8deff',
+            whiteBlueBackground: 'rgba(200,220,255,0.05)'
+        };
+        const chartOptions = (title) => ({
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { display: true, labels: { color: ChartConfig.lightText } },
+                title: { display: true, text: title, color: ChartConfig.lightText, font: { size: 16 } }
+            },
+            scales: {
+                x: { ticks: { color: ChartConfig.lightText }, grid: { color: ChartConfig.darkGray } },
+                y: { ticks: { color: ChartConfig.lightText }, grid: { color: ChartConfig.darkGray }, beginAtZero: true }
+            }
+        });
+
+        /* ---- External API config for live COVID ---- */
+        const API_CONFIG = {
+            DISEASE_SH_GLOBAL_ALL: 'https://disease.sh/v3/covid-19/all',
+            DISEASE_SH_COUNTRY: (country) =>
+                `https://disease.sh/v3/covid-19/countries/${encodeURIComponent(country)}?strict=true`,
+            DISEASE_SH_GLOBAL_HISTORICAL: (days) =>
+                `https://disease.sh/v3/covid-19/historical/all?lastdays=${days}`,
+            DISEASE_SH_COUNTRY_HISTORICAL: (country, days) =>
+                `https://disease.sh/v3/covid-19/historical/${encodeURIComponent(country)}?lastdays=${days}`,
+            INDIA_COVID_DATA: 'https://data.incovid19.org/v4/min/data.min.json',
+            INDIA_STATES_GEOJSON: 'https://raw.githubusercontent.com/nswamy14/geoJson/master/india.states.geo.json'
+        };
+
+        const INDIA_STATE_CODE_TO_NAME = {
+            "AN": "Andaman and Nicobar Islands",
+            "AP": "Andhra Pradesh",
+            "AR": "Arunachal Pradesh",
+            "AS": "Assam",
+            "BR": "Bihar",
+            "CH": "Chandigarh",
+            "CT": "Chhattisgarh",
+            "DL": "Delhi",
+            "DN": "Dadra and Nagar Haveli and Daman and Diu",
+            "GA": "Goa",
+            "GJ": "Gujarat",
+            "HP": "Himachal Pradesh",
+            "HR": "Haryana",
+            "JH": "Jharkhand",
+            "JK": "Jammu and Kashmir",
+            "KA": "Karnataka",
+            "KL": "Kerala",
+            "LA": "Ladakh",
+            "LD": "Lakshadweep",
+            "MH": "Maharashtra",
+            "ML": "Meghalaya",
+            "MN": "Manipur",
+            "MP": "Madhya Pradesh",
+            "MZ": "Mizoram",
+            "NL": "Nagaland",
+            "OR": "Odisha",
+            "PB": "Punjab",
+            "PY": "Puducherry",
+            "RJ": "Rajasthan",
+            "SK": "Sikkim",
+            "TG": "Telangana",
+            "TN": "Tamil Nadu",
+            "TR": "Tripura",
+            "UP": "Uttar Pradesh",
+            "UT": "Uttarakhand",
+            "WB": "West Bengal"
+        };
+
+        const INDIA_STATE_NAME_TO_CODE = {};
+        Object.entries(INDIA_STATE_CODE_TO_NAME).forEach(([code, name]) => {
+            INDIA_STATE_NAME_TO_CODE[name.toUpperCase()] = code;
+        });
+
+        /* ---- Symptom AI: config ---- */
+        const ILLNESSES = [
+            "Influenza (Seasonal Flu)",
+            "Dengue Fever",
+            "COVID-like Respiratory Infection",
+            "Gastroenteritis (Stomach Infection)",
+            "Migraine Episode",
+            "Pneumonia"
+        ];
+
+        const TRAINING_SEED = {
+            "Influenza (Seasonal Flu)": [
+                "I have fever, body pain and chills",
+                "I feel fatigued and sore throat and fever",
+                "High fever and headache with muscle aches"
+            ],
+            "Dengue Fever": [
+                "Severe headache behind the eyes and joint pain",
+                "High fever with rash and muscle pain",
+                "Sudden high fever and severe joint pains"
+            ],
+            "COVID-like Respiratory Infection": [
+                "Persistent cough and difficulty breathing and fever",
+                "Loss of smell and taste with cough and fatigue",
+                "Shortness of breath with fever and sore throat"
+            ],
+            "Gastroenteritis (Stomach Infection)": [
+                "Vomiting and diarrhea and abdominal pain",
+                "Stomach cramps with nausea and watery stools",
+                "Frequent vomiting and dehydration"
+            ],
+            "Migraine Episode": [
+                "Severe one-sided headache with light sensitivity",
+                "Throbbing headache with nausea and visual aura",
+                "Headache, sensitivity to light and sound"
+            ],
+            "Pneumonia": [
+                "High fever with chest pain and shallow breathing",
+                "Productive cough, chest pain and difficulty breathing",
+                "Rapid breathing, chest tightness and fever"
+            ]
+        };
+
+        const RED_FLAG_PATTERNS = [
+            /shortness of breath|difficulty breathing|cant breathe|can't breathe|breathless/i,
+            /chest pain|severe chest pain|pressure in chest/i,
+            /blue lips|cyanosis|loss of consciousness|unconscious|fainting/i,
+            /severe bleeding|vomiting blood|passing blood/i
+        ];
+
+        const TREATMENT_RECOMMENDATIONS = {
+            "Influenza (Seasonal Flu)": [
+                "Rest and stay hydrated.",
+                "Use antipyretics like paracetamol for fever (follow dosing).",
+                "If symptoms worsen or breathing difficulties occur, seek medical care."
+            ],
+            "Dengue Fever": [
+                "Avoid NSAIDs (e.g., ibuprofen) due to bleeding risk.",
+                "Maintain fluid intake (ORS) and seek medical monitoring.",
+                "Seek immediate medical attention for severe abdominal pain or vomiting."
+            ],
+            "COVID-like Respiratory Infection": [
+                "Isolate, monitor oxygen saturation if possible.",
+                "Seek testing and medical advice for breathing difficulty.",
+                "Rest, hydration, and antipyretics for fever."
+            ],
+            "Gastroenteritis (Stomach Infection)": [
+                "Oral rehydration (ORS), avoid anti-diarrheal drugs in some infections.",
+                "Small frequent meals and avoid dairy until recovery.",
+                "Seek care if severe dehydration or prolonged vomiting occurs."
+            ],
+            "Migraine Episode": [
+                "Rest in a dark, quiet room and use pain-relief as appropriate.",
+                "Identify triggers and stay hydrated.",
+                "Seek medical help if headaches are sudden and severe."
+            ],
+            "Pneumonia": [
+                "Seek urgent medical evaluation; may require antibiotics or hospital care.",
+                "Monitor breathing and oxygen levels; emergency care if worsening."
+            ]
+        };
+
+        /* ---- Frontend demo ML (USE + small classifier) ---- */
+        const illnessClassifier = {
+            useModel: null,
+            classifier: null,
+            labelIndex: ILLNESSES.slice(),
+            isReady: false,
+            async load() {
+                if (this.useModel) return;
+                document.getElementById('ml-status-text').innerText = 'Loading Universal Sentence Encoder...';
+                this.useModel = await use.load();
+                document.getElementById('ml-status-text').innerText = 'USE loaded. Classifier not trained.';
+            },
+            async train(seed = TRAINING_SEED, epochs = 25) {
+                if (!this.useModel) throw new Error('USE not loaded');
+                const sentences = [];
+                const labels = [];
+                for (const [label, arr] of Object.entries(seed)) {
+                    for (const s of arr) {
+                        sentences.push(s);
+                        labels.push(this.labelIndex.indexOf(label));
+                    }
+                }
+                document.getElementById('ml-status-text').innerText = 'Embedding seed sentences...';
+                const embeddings = await this.useModel.embed(sentences);
+                const xs = embeddings;
+                const ys = tf.tidy(() => tf.oneHot(tf.tensor1d(labels, 'int32'), this.labelIndex.length));
+
+                const inputDim = xs.shape[1];
+                const model = tf.sequential();
+                model.add(tf.layers.dense({ inputShape: [inputDim], units: 256, activation: 'relu' }));
+                model.add(tf.layers.dropout({ rate: 0.25 }));
+                model.add(tf.layers.dense({ units: 64, activation: 'relu' }));
+                model.add(tf.layers.dense({ units: this.labelIndex.length, activation: 'softmax' }));
+                model.compile({ optimizer: tf.train.adam(0.001), loss: 'categoricalCrossentropy', metrics: ['accuracy'] });
+
+                document.getElementById('ml-status-text').innerText = 'Training classifier (demo)...';
+                await model.fit(xs, ys, {
+                    epochs,
+                    shuffle: true,
+                    callbacks: {
+                        onEpochEnd: (epoch, logs) => {
+                            try {
+                                const acc = logs.acc || logs.accuracy;
+                                document.getElementById('ml-status-text').innerText =
+                                    `Training: epoch ${epoch+1}/${epochs} - loss ${logs.loss.toFixed(3)} acc ${acc ? (acc.toFixed(2)) : 'n/a'}`;
+                            } catch(e){}
+                        }
+                    }
+                });
+                ys.dispose();
+                this.classifier = model;
+                this.isReady = true;
+                document.getElementById('ml-status-text').innerText = 'ML classifier ready (in-browser fallback).';
+            },
+            async predict(text) {
+                if (!this.isReady || !this.useModel) throw new Error('Classifier not ready');
+                const emb = await this.useModel.embed([text]);
+                const pred = tf.tidy(() => {
+                    const logits = this.classifier.predict(emb);
+                    return logits.arraySync()[0];
+                });
+                emb.dispose();
+                return pred;
+            }
+        };
+
+        async function startTraining(){
+            try {
+                document.getElementById('train-ml-btn').disabled = true;
+                await illnessClassifier.load();
+                await illnessClassifier.train(TRAINING_SEED, 25);
+            } catch (err) {
+                console.error('Training error', err);
+                alert('ML training failed: ' + (err.message || err));
+            } finally {
+                document.getElementById('train-ml-btn').disabled = false;
+            }
+        }
+
+        function heuristicDiagnose(text) {
+            const lower = text.toLowerCase();
+            const results = ILLNESSES.map(name => ({ name, prob: 0 }));
+            const keywordMap = {
+                "Influenza (Seasonal Flu)": ["fever","body pain","chills","headache","fatigue","sore throat"],
+                "Dengue Fever": ["fever","joint pain","rash","eye pain","severe headache","platelet"],
+                "COVID-like Respiratory Infection": ["cough","breathing","shortness of breath","fatigue","fever","loss of smell","loss of taste"],
+                "Gastroenteritis (Stomach Infection)": ["vomiting","diarrhea","stomach pain","nausea"],
+                "Migraine Episode": ["headache","light sensitivity","sound sensitivity","nausea"],
+                "Pneumonia": ["cough","breathing","chest pain","fever","cold sweats","productive cough"]
+            };
+            ILLNESSES.forEach((ill, idx) => {
+                const keys = keywordMap[ill] || [];
+                let score = 0;
+                keys.forEach(k => { if (lower.includes(k)) score += 1; });
+                const prob = Math.min(1, score / Math.max(1, keys.length));
+                results[idx].prob = prob + 0.01;
+            });
+            const sum = results.reduce((a,b)=>a + b.prob,0) || 1;
+            return results.map(r => ({ name:r.name, prob: r.prob / sum }));
+        }
+
+        function detectRedFlags(text) {
+            const matches = [];
+            for (const r of RED_FLAG_PATTERNS) {
+                if (r.test(text)) matches.push(r.source || r.toString());
+            }
+            return matches;
+        }
+
+        function computeSeverityScore(predictions, redFlags) {
+            const top = predictions.slice().sort((a,b)=>b.prob-a.prob)[0] || { prob:0 };
+            let score = Math.round(top.prob * 80);
+            const criticalLabels = ["Pneumonia","Dengue Fever"];
+            predictions.forEach(p => {
+                for (const c of criticalLabels) {
+                    if (p.name.includes(c) && p.prob > 0.25) score += 10;
+                }
+            });
+            score += Math.min(20, redFlags.length * 10);
+            score = Math.min(100, Math.max(0, score));
+            return score;
+        }
+
+        function estimateTimeline(score) {
+            if (score >= 75) {
+                return { onset: 'Immediate (0-2 days)', peak: 'Early (3-7 days)', recovery: 'Variable; may require medical care (7-30+ days)' };
+            } else if (score >= 45) {
+                return { onset: 'Soon (1-4 days)', peak: 'Within 1 week (5-10 days)', recovery: '2-4 weeks' };
+            } else {
+                return { onset: 'Gradual (2-7 days)', peak: '2-3 weeks', recovery: 'Within a few days to 2 weeks' };
+            }
+        }
+
+        function renderProbabilityChart(predictions) {
+            const ctx = document.getElementById('probChart').getContext('2d');
+            const labels = predictions.map(p => p.name);
+            const data = predictions.map(p => +(p.prob*100).toFixed(1));
+            if (chartInstances['probChart']) chartInstances['probChart'].destroy();
+            chartInstances['probChart'] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label:'Probability (%)',
+                        data: data,
+                        backgroundColor: labels.map(() => ChartConfig.cyan)
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive:true,
+                    maintainAspectRatio:false,
+                    plugins: {
+                        legend: { display:false },
+                        title: { display:true, text:'Diagnosis Probabilities' }
+                    },
+                    scales: {
+                        x: { beginAtZero:true, max:100 },
+                        y: { ticks: { color: ChartConfig.lightText } }
+                    }
+                }
+            });
+        }
+
+        function renderSeverityGauge(score) {
+            const ctx = document.getElementById('severity-gauge').getContext('2d');
+            if (chartInstances['severity-gauge']) chartInstances['severity-gauge'].destroy();
+            chartInstances['severity-gauge'] = new Chart(ctx, {
+                type:'doughnut',
+                data: {
+                    labels:['Severity','Remaining'],
+                    datasets:[{
+                        data:[score,100-score],
+                        backgroundColor: [
+                            score >= 70 ? ChartConfig.red :
+                            score >= 40 ? ChartConfig.yellow :
+                            ChartConfig.cyan,
+                            'rgba(255,255,255,0.06)'
+                        ],
+                        borderWidth:0
+                    }]
+                },
+                options: {
+                    responsive:true,
+                    maintainAspectRatio:false,
+                    cutout:'70%',
+                    plugins:{ legend:{ display:false }, title:{ display:false } }
+                }
+            });
+            document.getElementById('severity-text').innerText = `Score: ${score}/100`;
+        }
+
+        function renderRecommendations(primary) {
+            const container = document.getElementById('recommendations-list');
+            container.innerHTML = '';
+            const recs = TREATMENT_RECOMMENDATIONS[primary] || ["General care: rest, fluids, and seek medical advice if symptoms worsen."];
+            recs.forEach(r => {
+                const div = document.createElement('div');
+                div.className = 'recommendation';
+                div.innerHTML = `<div style="font-weight:600; margin-bottom:.25rem;">${primary}</div><div style="font-size:.95rem;">${r}</div>`;
+                container.appendChild(div);
+            });
+        }
+
+        async function runDiagnosis() {
+            const text = (document.getElementById('symptom-input').value || '').trim();
+            const summaryDiv = document.getElementById('diag-top-result');
+            const timelineDiv = document.getElementById('diag-timeline');
+            const redBanner = document.getElementById('red-flag-banner');
+
+            if (!text) {
+                summaryDiv.innerHTML = '<span style="color:var(--color-warning);">Please enter symptoms to analyze.</span>';
+                return;
+            }
+
+            const redFlags = detectRedFlags(text);
+            if (redFlags.length > 0) {
+                redBanner.style.display = 'block';
+                redBanner.innerHTML = `<i class="fas fa-exclamation-triangle"></i> URGENT SYMPTOM(S) DETECTED: ${redFlags.length} potential red flag(s). Seek urgent care if severe.`;
+            } else {
+                redBanner.style.display = 'none';
+                redBanner.innerHTML = '';
+            }
+
+            summaryDiv.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Running AI diagnosis (backend)...`;
+            document.getElementById('recommendations-list').innerHTML = '<p class="small-muted">Analyzing...</p>';
+
+            let predictions = null;
+
+            // 1) Try BACKEND BERT model
+            try {
+                const res = await fetch(`${BACKEND_BASE_URL}/ai-diagnosis`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ text })
+                });
+                if (!res.ok) throw new Error("Backend error " + res.status);
+                const data = await res.json();
+                // Expected: { primary: ["DiseaseName", prob], all: [["D1", p1], ["D2", p2], ...] }
+                predictions = data.all.map(([name, prob]) => ({
+                    name,
+                    prob
+                }));
+            } catch (err) {
+                console.warn("Backend AI failed, falling back to frontend ML", err);
+            }
+
+            // 2) Fallback to in-browser model if backend unavailable
+            if (!predictions) {
+                if (illnessClassifier.isReady) {
+                    try {
+                        const probs = await illnessClassifier.predict(text);
+                        predictions = ILLNESSES.map((n,i) => ({ name: n, prob: +probs[i].toFixed(4) }));
+                    } catch (err) {
+                        console.warn('Frontend ML predict failed, falling back to heuristic', err);
+                        predictions = heuristicDiagnose(text);
+                    }
+                } else {
+                    predictions = heuristicDiagnose(text);
+                }
+            }
+
+            const sum = predictions.reduce((a,b) => a + b.prob, 0) || 1;
+            predictions = predictions.map(p => ({ name: p.name, prob: p.prob / sum }));
+            predictions.sort((a,b)=>b.prob-a.prob);
+            const top = predictions[0];
+
+            summaryDiv.innerHTML =
+                `<strong>${top.name}</strong> — Estimated probability ${(top.prob*100).toFixed(1)}% (AI risk estimate, not a diagnosis)`;
+
+            const severityScore = computeSeverityScore(predictions, redFlags);
+            const timeline = estimateTimeline(severityScore);
+            timelineDiv.innerHTML = `<strong>Onset:</strong> ${timeline.onset} • <strong>Peak:</strong> ${timeline.peak} • <strong>Recovery:</strong> ${timeline.recovery}`;
+
+            renderProbabilityChart(predictions);
+            renderSeverityGauge(severityScore);
+            renderRecommendations(top.name);
+
+            window.__lastDiagnosis = {
+                inputText: text,
+                predictions,
+                severityScore,
+                timeline,
+                redFlags,
+                primaryName: top.name,
+                timestamp: new Date().toISOString()
+            };
+        }
+
+        function downloadDiagnosisReport() {
+            const data = window.__lastDiagnosis;
+            if (!data) {
+                alert('No diagnosis to export. Run diagnosis first.');
+                return;
+            }
+            const report = document.createElement('div');
+            report.style.padding = '20px';
+            report.style.fontFamily = 'Inter, Arial, sans-serif';
+            report.style.color = '#0f172a';
+            report.style.background = '#fff';
+
+            const title = document.createElement('h2');
+            title.innerText = 'EpiSpot — Diagnosis Report (Demo Only)';
+            report.appendChild(title);
+
+            const when = document.createElement('p');
+            when.innerText = `Generated: ${new Date(data.timestamp).toLocaleString()}`;
+            report.appendChild(when);
+
+            const inputP = document.createElement('p');
+            inputP.innerHTML = `<strong>Symptoms Provided:</strong><br/>${escapeHtml(data.inputText)}`;
+            report.appendChild(inputP);
+
+            const topP = document.createElement('p');
+            topP.innerHTML = `<strong>Primary Prediction:</strong> ${data.primaryName} (${(data.predictions[0].prob*100).toFixed(1)}%)`;
+            report.appendChild(topP);
+
+            const severityP = document.createElement('p');
+            severityP.innerHTML = `<strong>Severity Score:</strong> ${data.severityScore}/100`;
+            report.appendChild(severityP);
+
+            const timelineP = document.createElement('p');
+            timelineP.innerHTML = `<strong>Estimated Timeline:</strong> Onset: ${data.timeline.onset}; Peak: ${data.timeline.peak}; Recovery: ${data.timeline.recovery}`;
+            report.appendChild(timelineP);
+
+            const table = document.createElement('table');
+            table.style.width='100%';
+            table.style.borderCollapse='collapse';
+            table.style.marginTop='12px';
+            const thead = document.createElement('thead');
+            thead.innerHTML = `<tr><th style="text-align:left;border-bottom:1px solid #ddd;padding:8px">Diagnosis</th><th style="text-align:right;border-bottom:1px solid #ddd;padding:8px">Probability</th></tr>`;
+            table.appendChild(thead);
+            const tbody = document.createElement('tbody');
+            data.predictions.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td style="padding:8px;border-bottom:1px solid #eee">${p.name}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">${(p.prob*100).toFixed(1)}%</td>`;
+                tbody.appendChild(tr);
+            });
+            table.appendChild(tbody);
+            report.appendChild(table);
+
+            const recH = document.createElement('h4');
+            recH.innerText = 'Recommendations (educational only)';
+            report.appendChild(recH);
+            const recList = document.createElement('ul');
+            (TREATMENT_RECOMMENDATIONS[data.primaryName] || ["General care: rest and hydration."]).forEach(r => {
+                const li = document.createElement('li');
+                li.innerText = r;
+                recList.appendChild(li);
+            });
+            report.appendChild(recList);
+
+            if (data.redFlags && data.redFlags.length > 0) {
+                const rf = document.createElement('p');
+                rf.style.color = '#b91c1c';
+                rf.innerHTML = `<strong>Red flags detected:</strong> ${data.redFlags.length} — seek urgent care with a healthcare professional.`;
+                report.appendChild(rf);
+            }
+
+            const opt = {
+                margin: 12,
+                filename: `EpiSpot_Diagnosis_${(new Date()).toISOString().slice(0,19).replace(/[:T]/g,'-')}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' }
+            };
+            html2pdf().set(opt).from(report).save();
+        }
+
+        function escapeHtml(unsafe) {
+            return unsafe.replace(/[&<"']/g, function(m) {
+                return {'&':'&amp;','<':'&lt;','"':'&quot;',"'":'&#039;'}[m];
+            }).replace(/\n/g,'<br/>');
+        }
+
+        /* ---- India hotspots: map + state data ---- */
+        let indiaMap = null;
+        let indiaGeoLayer = null;
+        let indiaStateData = null; // {code -> { name, active, delta, risk, ... }}
+
+        function getFeatureStateName(feature) {
+            const p = feature.properties || {};
+            return (
+                (p.st_nm) ||
+                (p.state_name) ||
+                (p.NAME_1) ||
+                (p.NAME) ||
+                ''
+            );
+        }
+
+        function stateNameToCodeGuess(name) {
+            if (!name) return null;
+            const upper = name.toUpperCase().trim();
+            if (INDIA_STATE_NAME_TO_CODE[upper]) return INDIA_STATE_NAME_TO_CODE[upper];
+
+            if (upper.includes('DELHI')) return 'DL';
+            if (upper.includes('MAHARASHTRA')) return 'MH';
+            if (upper.includes('KARNATAKA')) return 'KA';
+            if (upper.includes('TAMIL')) return 'TN';
+            if (upper.includes('WEST BENGAL')) return 'WB';
+            if (upper.includes('RAJASTHAN')) return 'RJ';
+            if (upper.includes('UTTAR PRADESH')) return 'UP';
+            if (upper.includes('MADHYA PRADESH')) return 'MP';
+            return null;
+        }
+
+        function styleForStateFeature(feature) {
+            const name = getFeatureStateName(feature);
+            const code = stateNameToCodeGuess(name);
+            const base = {
+                weight: 0.8,
+                color: '#0f172a',
+                fillOpacity: 0.95,
+                fillColor: '#4b5563'
+            };
+            if (!indiaStateData || !code || !indiaStateData[code]) {
+                return base;
+            }
+            const risk = indiaStateData[code].risk || 'LOW';
+            if (risk === 'HIGH') base.fillColor = getComputedStyle(document.documentElement).getPropertyValue('--color-danger') || '#ef4444';
+            else if (risk === 'MEDIUM') base.fillColor = getComputedStyle(document.documentElement).getPropertyValue('--color-warning') || '#facc15';
+            else base.fillColor = getComputedStyle(document.documentElement).getPropertyValue('--color-success') || '#22c55e';
+            return base;
+        }
+
+        async function initIndiaMap() {
+            try {
+                if (indiaMap) return;
+                const mapDiv = document.getElementById('india-map');
+                if (!mapDiv) return;
+
+                indiaMap = L.map('india-map', {
+                    zoomControl: true,
+                    attributionControl: false
+                }).setView([22.5, 80], 4.5);
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 7,
+                    minZoom: 3
+                }).addTo(indiaMap);
+
+                const resp = await fetch(API_CONFIG.INDIA_STATES_GEOJSON);
+                const geo = await resp.json();
+                indiaGeoLayer = L.geoJSON(geo, {
+                    style: styleForStateFeature,
+                    onEachFeature: (feature, layer) => {
+                        const name = getFeatureStateName(feature);
+                        const code = stateNameToCodeGuess(name);
+                        let content = `<strong>${name || 'Unknown'}</strong>`;
+                        if (code && indiaStateData && indiaStateData[code]) {
+                            const data = indiaStateData[code];
+                            content += `<br/>Active: ${data.active.toLocaleString()}<br/>New (24h): ${data.delta.toLocaleString()}<br/>Risk: ${data.risk}`;
+                        } else {
+                            content += `<br/><span style="font-size:0.8rem; color:#94a3b8;">No data yet.</span>`;
+                        }
+                        layer.bindTooltip(content, { sticky:true, direction:'auto', opacity:0.9 });
+                    }
+                }).addTo(indiaMap);
+
+                try {
+                    indiaMap.fitBounds(indiaGeoLayer.getBounds(), { padding:[10,10] });
+                } catch(e){}
+            } catch (err) {
+                console.error('India map init failed', err);
+                const errDiv = document.getElementById('hotspot-error');
+                if (errDiv) {
+                    errDiv.style.display = 'block';
+                    errDiv.textContent = 'Failed to load India boundary GeoJSON. Check your internet connection or CORS.';
+                }
+            }
+        }
+
+        // Backend disease state data (for dengue, malaria, etc.)
+        async function fetchBackendDiseaseStateData(diseaseKey) {
+            const resp = await fetch(
+                `${BACKEND_BASE_URL}/india-hotspots?disease=${encodeURIComponent(diseaseKey)}`
+            );
+            if (!resp.ok) {
+                throw new Error(`Backend error: ${resp.status}`);
+            }
+            const json = await resp.json();
+            indiaStateData = json; // { "MH": { name, active, delta, risk }, ... }
+            return json;
+        }
+
+        // Live COVID state-wise data from incovid19.org
+        async function fetchIndiaCovidStateData() {
+            if (indiaStateData && indiaStateData.__source === 'covid-api') {
+                return indiaStateData;
+            }
+            const resp = await fetch(API_CONFIG.INDIA_COVID_DATA);
+            const json = await resp.json();
+            const result = {};
+            for (const [code, entry] of Object.entries(json)) {
+                if (code === 'TT') continue;
+                const total = entry.total || {};
+                const delta = entry.delta || entry.delta7 || {};
+                const confirmed = total.confirmed || 0;
+                const recovered = total.recovered || 0;
+                const deceased = total.deceased || 0;
+                const active = Math.max(0, confirmed - recovered - deceased);
+                const newCases = delta.confirmed || 0;
+                const name = INDIA_STATE_CODE_TO_NAME[code] || code;
+
+                result[code] = {
+                    code,
+                    name,
+                    confirmed,
+                    recovered,
+                    deceased,
+                    active,
+                    delta: newCases,
+                    risk: 'LOW'
+                };
+            }
+
+            const activeValues = Object.values(result).map(s => s.active);
+            if (activeValues.length > 0) {
+                const maxActive = Math.max(...activeValues);
+                const highThreshold = maxActive * 0.6;
+                const medThreshold = maxActive * 0.3;
+                Object.values(result).forEach(s => {
+                    if (s.active >= highThreshold) s.risk = 'HIGH';
+                    else if (s.active >= medThreshold) s.risk = 'MEDIUM';
+                    else s.risk = 'LOW';
+                });
+            }
+            result.__source = 'covid-api';
+            indiaStateData = result;
+            return result;
+        }
+
+        async function updateHotspotData(diseaseKey) {
+            const tableBody = document.getElementById('hotspot-table-body');
+            const errorDiv = document.getElementById('hotspot-error');
+            if (!tableBody) return;
+
+            tableBody.innerHTML = '';
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+
+            let stateData;
+
+            try {
+                if (diseaseKey === 'covid') {
+                    stateData = await fetchIndiaCovidStateData();
+                } else {
+                    errorDiv.style.display = 'block';
+                    errorDiv.textContent =
+                        `Fetching live ${diseaseKey.toUpperCase()} hotspots from backend...`;
+                    stateData = await fetchBackendDiseaseStateData(diseaseKey);
+                }
+
+                const states = Object.values(stateData)
+                    .filter(s => typeof s === 'object' && s.code)
+                    .slice()
+                    .sort((a,b)=>b.active - a.active);
+
+                states.forEach(item => {
+                    const row = tableBody.insertRow();
+                    const riskColor =
+                        item.risk === 'HIGH' ? 'var(--color-danger)' :
+                        item.risk === 'MEDIUM' ? 'var(--color-warning)' :
+                        'var(--color-success)';
+                    const riskLabel = item.risk;
+                    row.innerHTML = `
+                        <td>${item.name}</td>
+                        <td style="color:${riskColor}; font-weight:600;">${riskLabel}</td>
+                        <td>${item.active.toLocaleString()}</td>
+                        <td>${item.delta.toLocaleString()}</td>
+                    `;
+                });
+
+                if (states.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="4">No state data available.</td></tr>';
+                }
+
+                if (indiaGeoLayer && indiaMap) {
+                    indiaGeoLayer.setStyle(styleForStateFeature);
+                    indiaGeoLayer.eachLayer(layer => {
+                        const feature = layer.feature;
+                        const name = getFeatureStateName(feature);
+                        const code = stateNameToCodeGuess(name);
+                        let content = `<strong>${name || 'Unknown'}</strong>`;
+                        if (code && indiaStateData && indiaStateData[code]) {
+                            const item = indiaStateData[code];
+                            content += `<br/>Active: ${item.active.toLocaleString()}<br/>New (24h): ${item.delta.toLocaleString()}<br/>Risk: ${item.risk}`;
+                        } else {
+                            content += `<br/><span style="font-size:0.8rem; color:#94a3b8;">No data.</span>`;
+                        }
+                        layer.bindTooltip(content, { sticky:true, direction:'auto', opacity:0.9 });
+                    });
+                }
+
+                if (diseaseKey !== 'covid') {
+                    errorDiv.style.display = 'block';
+                    errorDiv.textContent =
+                        `Showing ${diseaseKey.toUpperCase()} hotspots from your backend service.`;
+                }
+
+            } catch (err) {
+                console.error('Hotspot update failed', err);
+                tableBody.innerHTML = '<tr><td colspan="4">Failed to fetch live state data.</td></tr>';
+                errorDiv.style.display = 'block';
+                errorDiv.textContent = 'Could not contact backend or public API.';
+            }
+        }
+
+        /* ---- Global prediction (disease.sh COVID) ---- */
+        function guessCountryFromLocation(locLower) {
+            const mapping = {
+                'india':'India',
+                'bharat':'India',
+                'united states':'USA',
+                'usa':'USA',
+                'us ':'USA',
+                'america':'USA',
+                'united kingdom':'UK',
+                'uk':'UK',
+                'england':'UK',
+                'brazil':'Brazil',
+                'canada':'Canada',
+                'germany':'Germany',
+                'france':'France',
+                'italy':'Italy',
+                'spain':'Spain',
+                'china':'China',
+                'japan':'Japan',
+                'australia':'Australia',
+                'russia':'Russia'
+            };
+            for (const [key, value] of Object.entries(mapping)) {
+                if (locLower.includes(key)) return value;
+            }
+            return null;
+        }
+
+        async function fetchRegionSnapshot(locationStr) {
+            const locLower = (locationStr || '').toLowerCase();
+            const country = guessCountryFromLocation(locLower);
+            if (country) {
+                const [current, hist] = await Promise.all([
+                    fetch(API_CONFIG.DISEASE_SH_COUNTRY(country)).then(r=>r.json()),
+                    fetch(API_CONFIG.DISEASE_SH_COUNTRY_HISTORICAL(country, 90)).then(r=>r.json())
+                ]);
+                return { scope:'country', label:country, current, hist };
+            } else {
+                const [current, hist] = await Promise.all([
+                    fetch(API_CONFIG.DISEASE_SH_GLOBAL_ALL).then(r=>r.json()),
+                    fetch(API_CONFIG.DISEASE_SH_GLOBAL_HISTORICAL(90)).then(r=>r.json())
+                ]);
+                return { scope:'global', label:'Global', current, hist };
+            }
+        }
+
+        function computeRiskFromSnapshot(snapshot, yearsWindow) {
+            const { current, hist, label, scope } = snapshot;
+            const population = current.population || 0;
+            const todayCases = current.todayCases || 0;
+            const cases = current.cases || 0;
+            const deaths = current.deaths || 0;
+            const active = current.active || 0;
+
+            const casesPerMillion = current.casesPerOneMillion || (population ? (cases / population) * 1e6 : 0);
+            const deathsPerMillion = current.deathsPerOneMillion || (population ? (deaths / population) * 1e6 : 0);
+            const dailyPerMillion = population ? (todayCases / population) * 1e6 : 0;
+
+            let growthRate = 0;
+            let rtApprox = 0;
+            try {
+                const histCases = hist.cases || {};
+                const dates = Object.keys(histCases).sort((a,b)=> new Date(a) - new Date(b));
+                const newSeries = [];
+                for (let i=1;i<dates.length;i++) {
+                    newSeries.push(Math.max(0, (histCases[dates[i]]||0) - (histCases[dates[i-1]]||0)));
+                }
+                if (newSeries.length >= 28) {
+                    const last7 = newSeries.slice(-7);
+                    const prev7 = newSeries.slice(-14, -7);
+                    const meanLast7 = last7.reduce((a,b)=>a+b,0) / 7;
+                    const meanPrev7 = prev7.reduce((a,b)=>a+b,0) / 7 || 1;
+                    growthRate = ((meanLast7 - meanPrev7) / meanPrev7) * 100;
+                    rtApprox = meanPrev7 > 0 ? meanLast7 / meanPrev7 : 0;
+                }
+            } catch(e) {
+                console.warn('growth/rt computation failed', e);
+            }
+
+            let score = 0;
+
+            if (casesPerMillion > 150000) score += 25;
+            else if (casesPerMillion > 80000) score += 18;
+            else if (casesPerMillion > 30000) score += 10;
+            else if (casesPerMillion > 10000) score += 5;
+
+            if (dailyPerMillion > 20) score += 30;
+            else if (dailyPerMillion > 10) score += 22;
+            else if (dailyPerMillion > 5) score += 15;
+            else if (dailyPerMillion > 1) score += 8;
+
+            if (growthRate > 50) score += 20;
+            else if (growthRate > 20) score += 14;
+            else if (growthRate > 5) score += 8;
+            else if (growthRate < -20) score -= 8;
+
+            if (rtApprox > 1.3) score += 15;
+            else if (rtApprox > 1.1) score += 10;
+            else if (rtApprox > 1.0) score += 5;
+            else if (rtApprox < 0.9) score -= 5;
+
+            const crudeIFR = cases > 0 ? (deaths / cases) * 100 : 0;
+            if (crudeIFR > 2) score += 10;
+            else if (crudeIFR > 1) score += 5;
+
+            const windowFactor = Math.min(1.5, Math.max(0.7, yearsWindow / 3));
+            score = Math.round(Math.max(0, Math.min(100, score * windowFactor)));
+
+            let riskLevel = 'LOW';
+            if (score >= 70) riskLevel = 'HIGH';
+            else if (score >= 40) riskLevel = 'MEDIUM';
+
+            return {
+                score,
+                riskLevel,
+                label,
+                scope,
+                metrics: {
+                    population,
+                    todayCases,
+                    cases,
+                    deaths,
+                    active,
+                    casesPerMillion,
+                    deathsPerMillion,
+                    dailyPerMillion,
+                    growthRate,
+                    rtApprox,
+                    crudeIFR
+                }
+            };
+        }
+
+        let lastPredictionMetrics = null;
+
+        async function runPrediction() {
+            const location = (document.getElementById('location-input')?.value || 'Global').trim();
+            const diseaseType = document.getElementById('disease-type-input')?.value || 'covid-variants';
+            const dataPeriodYears = parseInt(document.getElementById('data-period-input')?.value) || 3;
+
+            const outputDiv = document.getElementById('prediction-output');
+            const riskDisplay = document.getElementById('risk-display');
+            const citationsDiv = document.getElementById('prediction-citations');
+
+            if (!outputDiv) return;
+
+            outputDiv.innerHTML = `<p style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> Contacting live COVID-19 epidemic APIs...</p>`;
+            if (riskDisplay) riskDisplay.style.display = 'none';
+            if (citationsDiv) citationsDiv.innerHTML = '';
+
+            try {
+                const snapshot = await fetchRegionSnapshot(location);
+                const risk = computeRiskFromSnapshot(snapshot, dataPeriodYears);
+                lastPredictionMetrics = risk;
+
+                const m = risk.metrics;
+                const diseaseLabel = diseaseType === 'covid-variants'
+                    ? 'COVID-19 and major variants'
+                    : diseaseType === 'all'
+                        ? 'COVID-19 as a proxy for overall respiratory/infectious risk'
+                        : `${diseaseType} (approximated via COVID-19 trend; specific pathogen data not wired)`;
+
+                const narrative = `
+                    <p><strong><i class="fas fa-globe"></i> Region:</strong> ${risk.label} (${snapshot.scope === 'global' ? 'Global overview' : 'Country-level snapshot'})</p>
+                    <p><strong><i class="fas fa-virus"></i> Disease focus:</strong> ${diseaseLabel}</p>
+                    <p><strong><i class="fas fa-users"></i> Population (est.):</strong> ${m.population ? m.population.toLocaleString() : 'N/A'}</p>
+                    <p><strong><i class="fas fa-disease"></i> Total cases:</strong> ${m.cases.toLocaleString()} (${m.casesPerMillion.toFixed(0)} per million)</p>
+                    <p><strong><i class="fas fa-burst"></i> New cases (last 24h):</strong> ${m.todayCases.toLocaleString()} (${m.dailyPerMillion.toFixed(1)} per million)</p>
+                    <p><strong><i class="fas fa-heartbeat"></i> Deaths:</strong> ${m.deaths.toLocaleString()} (${m.deathsPerMillion.toFixed(1)} per million), crude IFR ≈ ${m.crudeIFR.toFixed(2)}%</p>
+                    <p><strong><i class="fas fa-chart-line"></i> Recent trend (last ~2 weeks):</strong>
+                        growth ≈ ${m.growthRate.toFixed(1)}%,
+                        Rt-like signal ≈ ${m.rtApprox ? m.rtApprox.toFixed(2) : 'N/A'}
+                    </p>
+                    <p style="margin-top: 0.75rem; border-top:1px solid #334155; padding-top:0.75rem;">
+                        <strong>EpiSpot composite risk score:</strong> <span style="font-weight:800;">${risk.score}/100</span>
+                        — categorised as <strong>${risk.riskLevel}</strong> for the next 3–6 months, based <em>only</em> on live COVID-19 surveillance indicators.
+                    </p>
+                    <p style="margin-top:0.75rem;font-size:0.8rem;color:#94a3b8;">
+                        <i class="fas fa-triangle-exclamation"></i> This tool uses public APIs and heuristic rules — it cannot
+                        reliably “predict” pandemics or replace professional epidemiological modelling.
+                    </p>
+                `;
+                outputDiv.innerHTML = narrative;
+
+                if (riskDisplay) {
+                    riskDisplay.className = `risk-level risk-${risk.riskLevel.toLowerCase()}`;
+                    riskDisplay.style.display = 'block';
+                    riskDisplay.textContent = `Overall Epidemic Risk (COVID-based): ${risk.riskLevel}`;
+                }
+
+                if (citationsDiv) {
+                    citationsDiv.innerHTML = `
+                        <p style="font-size:0.8rem;">
+                            <strong>Live data sources:</strong>
+                            disease.sh Open Disease API (global & country COVID-19 statistics) and incovid19.org (India state panel).
+                        </p>
+                    `;
+                }
+            } catch (err) {
+                console.error('runPrediction error', err);
+                outputDiv.innerHTML = `<p style="color:var(--color-danger);">
+                    <i class="fas fa-times-circle"></i> Failed to fetch live epidemic data.
+                    Check your internet connection or that disease.sh is reachable.
+                </p>`;
+            }
+        }
+
+        /* ---- Global trends chart via backend ---- */
+        async function renderGlobalTrendChart() {
+            const canvas = document.getElementById('global-trend-chart');
+            const loadingDiv = document.getElementById('global-trend-loading');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (chartInstances['global-trend-chart']) chartInstances['global-trend-chart'].destroy();
+
+            const diseaseSelect = document.getElementById('global-disease-select');
+            const diseaseKey = diseaseSelect ? diseaseSelect.value : 'covid';
+
+            try {
+                if (loadingDiv) {
+                    loadingDiv.style.display = 'flex';
+                    loadingDiv.innerHTML = `<i class="fas fa-spinner fa-spin" style="margin-right:0.5rem;"></i> Fetching ${diseaseKey.toUpperCase()} time-series from backend...`;
+                }
+
+                const resp = await fetch(`${BACKEND_BASE_URL}/global-trends?disease=${encodeURIComponent(diseaseKey)}`);
+                if (!resp.ok) throw new Error("Backend error " + resp.status);
+                const data = await resp.json();
+
+                const casesSeries = data.cases || {};
+                const dates = Object.keys(casesSeries).sort((a,b)=> new Date(a) - new Date(b));
+                if (dates.length < 14) throw new Error('Not enough history');
+
+                const daily = [];
+                const labels = [];
+                for (let i=1;i<dates.length;i++) {
+                    const prev = casesSeries[dates[i-1]] || 0;
+                    const curr = casesSeries[dates[i]] || 0;
+                    daily.push(Math.max(0, curr - prev));
+                    labels.push(dates[i]);
+                }
+
+                const ma7 = [];
+                const rtLike = [];
+                for (let i=0;i<daily.length;i++) {
+                    if (i < 6) {
+                        ma7.push(null);
+                        rtLike.push(null);
+                    } else {
+                        const slice7 = daily.slice(i-6, i+1);
+                        const mean7 = slice7.reduce((a,b)=>a+b,0) / 7;
+                        ma7.push(mean7);
+                        if (i >= 13) {
+                            const prev7 = daily.slice(i-13, i-6);
+                            const meanPrev7 = prev7.reduce((a,b)=>a+b,0) / 7 || 1;
+                            rtLike.push(mean7 / meanPrev7);
+                        } else {
+                            rtLike.push(null);
+                        }
+                    }
+                }
+
+                if (loadingDiv) loadingDiv.style.display = 'none';
+
+                chartInstances['global-trend-chart'] = new Chart(ctx, {
+                    type:'line',
+                    data:{
+                        labels: labels,
+                        datasets:[
+                            {
+                                label:`${diseaseKey.toUpperCase()} 7-day avg new cases`,
+                                data: ma7,
+                                borderColor: ChartConfig.whiteBlue,
+                                backgroundColor: ChartConfig.whiteBlueBackground,
+                                yAxisID:'yCases',
+                                tension:0.4,
+                                fill:true,
+                                pointRadius:0
+                            },
+                            {
+                                label:'Rt-like growth signal',
+                                data: rtLike,
+                                borderColor: ChartConfig.cyan,
+                                backgroundColor:'transparent',
+                                yAxisID:'yRValue',
+                                tension:0.4,
+                                fill:false,
+                                pointRadius:0,
+                                borderDash:[8,4],
+                                borderWidth:2
+                            }
+                        ]
+                    },
+                    options:{
+                        responsive:true,
+                        maintainAspectRatio:false,
+                        plugins:{
+                            legend:{ display:true, labels:{ color:ChartConfig.lightText } },
+                            title:{
+                                display:true,
+                                text:`Global ${diseaseKey.toUpperCase()} incidence & growth`,
+                                color:ChartConfig.lightText,
+                                font:{ size:18 }
+                            }
+                        },
+                        scales:{
+                            x:{ ticks:{ color:ChartConfig.lightText, maxTicksLimit:10 }, grid:{ color:ChartConfig.darkGray } },
+                            yCases:{
+                                type:'linear',
+                                display:true,
+                                position:'left',
+                                title:{ display:true, text:'New cases (7d avg)', color:ChartConfig.whiteBlue },
+                                ticks:{ color:ChartConfig.whiteBlue },
+                                grid:{ color:ChartConfig.darkGray }
+                            },
+                            yRValue:{
+                                type:'linear',
+                                display:true,
+                                position:'right',
+                                title:{ display:true, text:'Rt-like signal', color:ChartConfig.cyan },
+                                ticks:{ color:ChartConfig.cyan, stepSize:0.2 },
+                                grid:{ drawOnChartArea:false }
+                            }
+                        }
+                    }
+                });
+
+            } catch (err) {
+                console.error('Global trend chart error', err);
+                if (loadingDiv) {
+                    loadingDiv.style.display = 'flex';
+                    loadingDiv.innerHTML = `<span style="color:var(--color-danger);">
+                        <i class="fas fa-times-circle"></i> Failed to load ${diseaseKey.toUpperCase()} data from backend.
+                    </span>`;
+                }
+            }
+        }
+
+        /* ---- Resource forecast via backend SEIR ---- */
+        async function runResourceForecast() {
+            const outputDiv = document.getElementById("resource-forecast-output");
+            if (!outputDiv) return;
+
+            const beds = parseInt(document.getElementById("beds-available")?.value) || 0;
+            const icu = parseInt(document.getElementById("icu-occupancy")?.value) || 0;
+            const vents = parseInt(document.getElementById("vent-inventory")?.value) || 0;
+            const duration = parseInt(document.getElementById("forecast-duration")?.value) || 90;
+            const diseaseSelect = document.getElementById('global-disease-select');
+            const diseaseKey = diseaseSelect ? diseaseSelect.value : 'covid';
+
+            outputDiv.innerHTML = `<p style="color:#94a3b8; text-align:center;">
+                <i class="fas fa-spinner fa-spin"></i> Querying epidemic forecast backend for ${diseaseKey.toUpperCase()}...
+            </p>`;
+
+            try {
+                const res = await fetch(`${BACKEND_BASE_URL}/global-forecast?disease=${encodeURIComponent(diseaseKey)}`);
+                if (!res.ok) throw new Error("Backend error " + res.status);
+                const data = await res.json();
+                const curve = data.infected_curve || [];
+                const horizon = Math.min(duration, curve.length);
+
+                const POPULATION = 10000000;
+                const projectedCases = Math.round(
+                    curve.slice(0, horizon).reduce((sum, p) => sum + p * POPULATION, 0)
+                );
+
+                const hosp = Math.round(projectedCases * 0.10);
+                const icuNeed = Math.round(projectedCases * 0.03);
+                const ventNeed = Math.round(projectedCases * 0.01);
+
+                const bedDeficit = Math.max(0, hosp - beds);
+                const ventDeficit = Math.max(0, ventNeed - vents);
+
+                const currentlyUsedBeds = (beds * (icu / 100));
+                const peakBedUse = Math.min(130, Math.round(((currentlyUsedBeds + hosp) / (beds || 1)) * 100));
+
+                outputDiv.innerHTML = `
+                    <p style="font-weight:600;color:${ bedDeficit > 0 || ventDeficit > 0 ? "var(--color-danger)" : "var(--color-success)"}">
+                        Forecast Status (${duration} days, disease: ${diseaseKey.toUpperCase()}):
+                        ${ bedDeficit > 0 || ventDeficit > 0 ? "System likely overloaded" : "Capacity likely manageable" }
+                    </p>
+
+                    <div class="resource-metric"><span class="metric-label">Projected infections (approx.)</span><span class="metric-value">${projectedCases.toLocaleString()}</span></div>
+                    <div class="resource-metric"><span class="metric-label">Predicted Hospitalizations</span><span class="metric-value">${hosp.toLocaleString()}</span></div>
+                    <div class="resource-metric"><span class="metric-label">ICU Beds Required</span><span class="metric-value">${icuNeed.toLocaleString()}</span></div>
+                    <div class="resource-metric"><span class="metric-label">Ventilators Required</span><span class="metric-value">${ventNeed.toLocaleString()}</span></div>
+
+                    <h5 style="margin-top:1rem;">Capacity Gaps</h5>
+                    <div class="resource-metric"><span class="metric-label">Bed Deficit</span><span class="metric-value" style="color:${ bedDeficit > 0 ? "var(--color-danger)" : "var(--color-success)"}">${ bedDeficit > 0 ? "+"+bedDeficit.toLocaleString() : "Sufficient" }</span></div>
+                    <div class="resource-metric"><span class="metric-label">Ventilator Deficit</span><span class="metric-value" style="color:${ ventDeficit > 0 ? "var(--color-danger)" : "var(--color-success)"}">${ ventDeficit > 0 ? "+"+ventDeficit.toLocaleString() : "Sufficient" }</span></div>
+                    <div class="resource-metric"><span class="metric-label">Peak Bed Utilization (approx.)</span><span class="metric-value">${peakBedUse}%</span></div>
+                `;
+            } catch (err) {
+                console.error("resource forecast error", err);
+                outputDiv.innerHTML = `<p style="color:var(--color-danger);">
+                    <i class="fas fa-times-circle"></i> Could not contact forecast backend.
+                </p>`;
+            }
+        }
+
+        /* ---- CSV Analyzer ---- */
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            const resultsDiv = document.getElementById('analysis-results');
+            const loadingDiv = document.getElementById('analysis-loading');
+            const errorDiv = document.getElementById('analysis-error');
+            const reportContent = document.getElementById('report-content');
+
+            resultsDiv.style.display = 'none';
+            errorDiv.style.display = 'none';
+            loadingDiv.style.display = 'block';
+            reportContent.innerHTML = '';
+
+            if (!file) {
+                loadingDiv.style.display = 'none';
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                setTimeout(() => {
+                    try {
+                        const csvText = e.target.result;
+                        const data = parseCSV(csvText);
+                        if (data.length === 0) throw new Error("CSV file is empty or could not be parsed. Check headers and format.");
+                        const analysis = analyzeEpidemicData(data);
+                        displayAnalysisReport(analysis);
+                        renderAnalyzerCharts(data);
+                        resultsDiv.style.display = 'block';
+                    } catch (e) {
+                        document.getElementById('error-message').textContent = 'Error: ' + e.message;
+                        errorDiv.style.display = 'block';
+                    } finally {
+                        loadingDiv.style.display = 'none';
+                    }
+                }, 800);
+            };
+            reader.onerror = function() {
+                loadingDiv.style.display = 'none';
+                document.getElementById('error-message').textContent = 'Error reading file.';
+                errorDiv.style.display = 'block';
+            };
+            reader.readAsText(file);
+        }
+
+        function parseCSV(csvText) {
+            const lines = csvText.trim().split('\n');
+            if (lines.length < 2) return [];
+            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            const data = [];
+
+            const dateCol = headers.findIndex(h => h.toLowerCase().includes('date') || h.toLowerCase().includes('day'));
+            const casesCol = headers.findIndex(h => h.toLowerCase().includes('case') || h.toLowerCase().includes('confirmed'));
+            const deathsCol = headers.findIndex(h => h.toLowerCase().includes('death') || h.toLowerCase().includes('deceased'));
+
+            if (dateCol === -1 || casesCol === -1 || deathsCol === -1) {
+                throw new Error("CSV must contain columns for 'Date', 'Cases' (or Confirmed), and 'Deaths' (or Deceased).");
+            }
+
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+                if (values.length >= headers.length) {
+                    const d = new Date(values[dateCol]);
+                    if (isNaN(d.getTime())) continue;
+                    data.push({
+                        date: d,
+                        cases: parseInt(values[casesCol]) || 0,
+                        deaths: parseInt(values[deathsCol]) || 0
+                    });
+                }
+            }
+            return data.filter(d => !isNaN(d.date.getTime()));
+        }
+
+        function analyzeEpidemicData(data) {
+            data.sort((a,b)=>a.date-b.date);
+            const totalCases = data.reduce((sum,item)=>sum+item.cases,0);
+            const totalDeaths = data.reduce((sum,item)=>sum+item.deaths,0);
+            const mortalityRate = totalCases > 0 ? ((totalDeaths/totalCases)*100).toFixed(2) : 0;
+            const startDate = data[0].date.toLocaleDateString('en-IN');
+            const endDate = data[data.length-1].date.toLocaleDateString('en-IN');
+            const periodDays = (data[data.length-1].date - data[0].date) / (1000*60*60*24);
+
+            const monthlyData = data.reduce((acc,item)=>{
+                if (!item.date||isNaN(item.date.getTime())) return acc;
+                const monthKey = `${item.date.getFullYear()}-${String(item.date.getMonth()+1).padStart(2,'0')}`;
+                if (!acc[monthKey]) acc[monthKey]={cases:0,deaths:0};
+                acc[monthKey].cases += item.cases;
+                acc[monthKey].deaths += item.deaths;
+                return acc;
+            },{});
+
+            let maxCases=0; let worstMonthKey='N/A';
+            for (const [key,value] of Object.entries(monthlyData)) {
+                if (value.cases>maxCases){ maxCases=value.cases; worstMonthKey=key; }
+            }
+            const worstMonthFormatted = worstMonthKey !== 'N/A'
+                ? new Date(worstMonthKey+'-01').toLocaleDateString('en-IN',{year:'numeric',month:'long'})
+                : 'N/A';
+
+            let severity='Low'; let severityColor='var(--color-success)';
+            if (mortalityRate>5) { severity='Critical'; severityColor='var(--color-danger)'; }
+            else if (mortalityRate>1) { severity='High'; severityColor='var(--color-warning)'; }
+
+            return {
+                totalCases: totalCases.toLocaleString(),
+                totalDeaths: totalDeaths.toLocaleString(),
+                mortalityRate: mortalityRate + '%',
+                severity: severity,
+                severityColor: severityColor,
+                startDate: startDate,
+                endDate: endDate,
+                periodDays: Math.round(periodDays),
+                worstMonth: worstMonthFormatted,
+                maxCases: maxCases.toLocaleString(),
+                monthlyData: monthlyData
+            };
+        }
+
+        function displayAnalysisReport(analysis) {
+            const reportContent = document.getElementById('report-content');
+            const progressionText = analysis.periodDays > 30
+                ? `Over a period of ${analysis.periodDays} days`
+                : `Throughout the ${analysis.periodDays}-day period`;
+            reportContent.innerHTML = `
+                <p><strong><i class="fas fa-calendar-check"></i> Data Period:</strong> ${analysis.startDate} to ${analysis.endDate} (${analysis.periodDays} days)</p>
+                <p><strong><i class="fas fa-users"></i> Total Cases Recorded:</strong> <span style="font-weight:700;">${analysis.totalCases}</span></p>
+                <p><strong><i class="fas fa-procedures"></i> Total Deaths Recorded:</strong> <span style="font-weight:700; color:var(--color-danger);">${analysis.totalDeaths}</span></p>
+                <hr style="border-color:#334155; margin:1rem 0;">
+                <p><strong><i class="fas fa-percent"></i> Calculated Mortality Rate:</strong> ${analysis.mortalityRate}</p>
+                <p><strong><i class="fas fa-hand-paper"></i> Severity Assessment:</strong> <span style="font-weight:700; color:${analysis.severityColor};">${analysis.severity}</span></p>
+                <hr style="border-color:#334155; margin:1rem 0;">
+                <p><strong><i class="fas fa-fire"></i> Worst Month Detected:</strong> <span style="font-weight:700;">${analysis.worstMonth}</span>, with <span style="font-weight:700; color:var(--color-danger);">${analysis.maxCases}</span> cases.</p>
+                <p><strong><i class="fas fa-chart-line"></i> Progression Summary:</strong> ${progressionText}, the epidemic peaked in ${analysis.worstMonth} before ${analysis.periodDays > 365 ? 'eventually receding' : 'showing signs of stabilization'}.</p>
+            `;
+        }
+
+        function renderAnalyzerCharts(data) {
+            const monthlyData = data.reduce((acc,item)=>{
+                if (!item.date||isNaN(item.date.getTime())) return acc;
+                const monthYear = item.date.toLocaleString('en-IN',{ year:'numeric', month:'short'});
+                if (!acc[monthYear]) acc[monthYear] = { cases:0, deaths:0 };
+                acc[monthYear].cases += item.cases;
+                acc[monthYear].deaths += item.deaths;
+                return acc;
+            },{});
+
+            const labels = Object.keys(monthlyData).sort((a,b) => new Date(a) - new Date(b));
+            const caseData = labels.map(label => monthlyData[label].cases);
+            const deathData = labels.map(label => monthlyData[label].deaths);
+
+            if (chartInstances['cases-progression-chart']) chartInstances['cases-progression-chart'].destroy();
+            if (chartInstances['deaths-progression-chart']) chartInstances['deaths-progression-chart'].destroy();
+
+            const ctxCases = document.getElementById('cases-progression-chart').getContext('2d');
+            chartInstances['cases-progression-chart'] = new Chart(ctxCases, {
+                type:'line',
+                data:{
+                    labels:labels,
+                    datasets:[{
+                        label:'Monthly Cases',
+                        data:caseData,
+                        borderColor:ChartConfig.cyan,
+                        backgroundColor:ChartConfig.whiteBlueBackground,
+                        tension:0.4,
+                        fill:true,
+                        pointRadius:3
+                    }]
+                },
+                options: chartOptions('Case Progression Over Time')
+            });
+
+            const ctxDeaths = document.getElementById('deaths-progression-chart').getContext('2d');
+            chartInstances['deaths-progression-chart'] = new Chart(ctxDeaths, {
+                type:'bar',
+                data:{
+                    labels:labels,
+                    datasets:[{
+                        label:'Monthly Deaths',
+                        data:deathData,
+                        backgroundColor:ChartConfig.red,
+                        pointRadius:3
+                    }]
+                },
+                options: chartOptions('Death Toll Over Time')
+            });
+        }
+
+        /* ---- Tabs ---- */
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(button => button.classList.remove('active'));
+
+            const selectedTabContent = document.getElementById(tabId);
+            if (selectedTabContent) selectedTabContent.classList.add('active');
+
+            const selectedButton = Array.from(document.querySelectorAll('.tab-button'))
+                .find(b => b.getAttribute('onclick')?.includes(`showTab('${tabId}')`));
+            if (selectedButton) selectedButton.classList.add('active');
+
+            if (tabId === 'global-trends') renderGlobalTrendChart();
+        }
+
+        /* ---- Init ---- */
+        window.addEventListener('DOMContentLoaded', () => {
+            try {
+                initIndiaMap();
+                updateHotspotData(document.getElementById('hotspot-disease-select').value);
+                showTab('india-hotspots');
+            } catch (e) {
+                console.warn(e);
+            }
+        });
+    </script>
+</body>
+</html>
