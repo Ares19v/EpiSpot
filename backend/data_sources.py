@@ -4,7 +4,7 @@ def fetch_global_disease_trends(disease):
     if disease.lower() == "covid":
         try:
             url = "https://disease.sh/v3/covid-19/historical/all?lastdays=365"
-            data = requests.get(url).json()
+            data = requests.get(url, timeout=10).json()
             if "cases" in data:
                 return data
         except Exception as e:

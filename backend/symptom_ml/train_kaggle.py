@@ -195,7 +195,7 @@ def train():
     )
 
     # Tokenizer & datasets
-    tokenizer = BertTokenizer.from_pretrained(BASE_MODEL_NAME)
+    tokenizer = BertTokenizer.from_pretrained(BASE_MODEL_NAME, revision="main")  # nosec B615
     train_dataset = SymptomTextDataset(train_texts, train_labels, tokenizer, MAX_LEN)
     val_dataset = SymptomTextDataset(val_texts, val_labels, tokenizer, MAX_LEN)
 
@@ -208,6 +208,7 @@ def train():
         num_labels=len(unique_labels),
         id2label=id2label,
         label2id=label2id,
+        revision="main",  # nosec B615
     )
     model.to(device)
 

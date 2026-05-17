@@ -56,7 +56,7 @@ def _lazy_load():
         return
 
     print(f"[infer] Loading tokenizer and model weights on {_device}...")
-    _tokenizer = BertTokenizerFast.from_pretrained(MODEL_NAME)
+    _tokenizer = BertTokenizerFast.from_pretrained(MODEL_NAME, revision="main")  # nosec B615
 
     label2id = {v: k for k, v in id2label.items()}
     num_labels = len(id2label)
@@ -64,10 +64,11 @@ def _lazy_load():
         MODEL_NAME,
         num_labels=num_labels,
         id2label=id2label,
-        label2id=label2id
+        label2id=label2id,
+        revision="main"  # nosec B615
     )
 
-    state_dict = torch.load(MODEL_PATH, map_location=_device)
+    state_dict = torch.load(MODEL_PATH, map_location=_device, weights_only=True)  # nosec B614
     model.load_state_dict(state_dict)
     model.to(_device)
     model.eval()

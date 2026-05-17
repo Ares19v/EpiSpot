@@ -23,7 +23,7 @@ def load_state_disease_data(disease):
         import hashlib
         result = {}
         for code, name in states.items():
-            h = int(hashlib.md5(f"{disease}_{code}".encode('utf-8')).hexdigest(), 16)
+            h = int(hashlib.md5(f"{disease}_{code}".encode('utf-8'), usedforsecurity=False).hexdigest(), 16)  # nosec B324
             active = (h % 900) + 50
             delta = int(active * 0.08)
             risk = "HIGH" if active > 600 else "MEDIUM" if active > 250 else "LOW"

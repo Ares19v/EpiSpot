@@ -199,12 +199,13 @@ def train():
         )
     print(f"[train_kaggle] Saved label mapping to {LABEL_MAP_PATH}")
 
-    tokenizer = BertTokenizerFast.from_pretrained(PRETRAINED_MODEL_NAME)
+    tokenizer = BertTokenizerFast.from_pretrained(PRETRAINED_MODEL_NAME, revision="main")  # nosec B615
 
     num_labels = len(label2id)
     model = BertForSequenceClassification.from_pretrained(
         PRETRAINED_MODEL_NAME,
         num_labels=num_labels,
+        revision="main"  # nosec B615
     )
     model.to(device)
 
