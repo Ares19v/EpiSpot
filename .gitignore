@@ -1,6 +1,68 @@
-backend/venv/
-.venv/
+# Python caches and compiler outputs
 __pycache__/
-.DS_Store
-*.lnk
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Environments and dependencies
+.venv/
+venv/
+ENV/
+env/
 .env
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Machine Learning & Heavy Data Binaries
+backend/symptom_ml/model.bin
+backend/symptom_ml/*.bin
+backend/symptom_ml/label_mapping.json
+backend/symptom_ml/id2label.json.tmp
+backend/server_log.txt
+backend/server_err.txt
+
+# Node / JS
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Operating System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.lnk
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+.project
+.pydevproject
+.settings/

@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>EpiSpot - Epidemic Predictor Dashboard</title>
+
+    <!-- Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+
+    <!-- Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.12.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/universal-sentence-encoder@1.3.3/dist/universal-sentence-encoder.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.2/html2pdf.bundle.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <div class="logo"><i class="fas fa-microscope"></i> EpiSpot</div>
+        <nav aria-label="Main navigation"></nav>
+    </header>
+
+    <main>
+        <div class="dashboard-grid">
+
+            <!-- Prediction Panel -->
+            <div class="card" id="prediction-panel">
+                <div class="card-header">
+                    <i class="fas fa-chart-line"></i> Global Epidemic Prediction Model (Live COVID Data)
+                </div>
+
+                <div class="prediction-input">
+                    <label for="location-input">Target Region</label>
+                    <input type="text" id="location-input" placeholder="e.g., Global, India, India - Maharashtra, United States" />
+
+                    <label for="disease-type-input">Disease Type Focus</label>
+                    <select id="disease-type-input">
+                        <option value="covid-variants">COVID-19 / Variants (live data)</option>
+                        <option value="all">Generalised Respiratory / Infectious Risk (COVID proxy)</option>
+                        <option value="influenza">Influenza Strain (Flu) — uses COVID data as proxy</option>
+                        <option value="dengue">Dengue Fever — requires custom backend</option>
+                        <option value="cholera">Cholera Outbreaks — requires custom backend</option>
+                    </select>
+
+                    <label for="data-period-input">Historical Context Window (Years)</label>
+                    <input type="number" id="data-period-input" value="3" min="1" max="10" />
+
+                    <div style="display:flex; gap:.5rem; flex-wrap:wrap;">
+                        <button onclick="runPrediction()" class="btn-primary" style="display:inline-flex; align-items:center; gap:.5rem;">
+                            <i class="fas fa-play"></i> Run Prediction Analysis
+                        </button>
+                        <button onclick="runResourceForecast()" class="btn-secondary" style="display:inline-flex; align-items:center; gap:.5rem;">
+                            <i class="fas fa-clipboard-check"></i> Quick Resource Forecast
+                        </button>
+                    </div>
+                </div>
+
+                <div id="prediction-output">
+                    <p>Connects to public epidemic APIs and computes a risk score. Outputs will appear here.</p>
+                    <div class="risk-level risk-low" id="risk-display" style="display:none;"></div>
+                </div>
+                <div id="prediction-citations"></div>
+            </div>
+
+            <!-- AI Symptom Diagnostic Suite -->
+            <div class="card" id="symptom-checker-panel">
+                <div class="card-header"><i class="fas fa-stethoscope"></i> AI Symptom Diagnostic Suite (Demo, Not Medical Advice)</div>
+
+                <p style="color:#94a3b8; margin-bottom: .75rem;">
+                    Uses a backend BERT model (if available) plus an in-browser Universal Sentence Encoder fallback
+                    to rank likely conditions. <strong>Not a real diagnosis.</strong> Educational demo only.
+                </p>
+
+                <div class="diagnostic-suite">
+                    <div class="diagnostic-row">
+                        <div class="diag-left">
+                            <label for="symptom-input" style="font-weight:600;">Symptoms</label>
+                            <textarea id="symptom-input" placeholder="e.g., high fever, cough, shortness of breath, and chest pain." style="width:100%; height:150px; padding:1rem; border-radius:8px; border:1px solid #475569; background:#0f172a; color:white; resize:vertical;"></textarea>
+
+                            <div class="diagnosis-controls">
+                                <button id="train-ml-btn" class="btn-secondary" onclick="startTraining()" title="Load USE and train the small classifier (demo)">
+                                    <i class="fas fa-robot"></i> Load & Train ML
+                                </button>
+                                <button id="run-dx-btn" class="btn-primary" onclick="runDiagnosis()" title="Run the diagnosis using backend ML (if available) or in-browser fallback">
+                                    <i class="fas fa-heartbeat"></i> Run Diagnosis
+                                </button>
+                                <button id="download-report-btn" class="btn-secondary" onclick="downloadDiagnosisReport()" title="Export the last diagnosis as a PDF">
+                                    <i class="fas fa-file-download"></i> Download Report
+                                </button>
+                            </div>
+
+                            <div id="ml-status" style="margin-top:.5rem;" class="small-muted">
+                                ML model status: <span id="ml-status-text">Not loaded (frontend fallback only)</span>
+                            </div>
+
+                            <div id="red-flag-banner" class="red-flag-banner" role="alert" aria-live="polite"></div>
+
+                            <div id="diagnosis-summary" style="margin-top:1rem; padding:1rem; border-radius:8px; background:#081122; border:1px solid #223148;">
+                                <h4 style="margin:0 0 .5rem 0;">Diagnosis Summary</h4>
+                                <div id="diag-top-result" style="margin-bottom:.5rem; color:#cbd5e1;">No diagnosis yet.</div>
+                                <div id="diag-timeline" class="small-muted"></div>
+                            </div>
+                        </div>
+
+                        <div class="diag-right">
+                            <div class="card" style="padding:0.85rem; margin-bottom:.8rem;">
+                                <div class="card-header" style="border-bottom:none; margin-bottom:.5rem; padding-bottom:0;">Probability Breakdown</div>
+                                <div style="height:220px;">
+                                    <canvas id="probChart"></canvas>
+                                </div>
+                            </div>
+
+                            <div class="card" style="padding:0.85rem; margin-bottom:.8rem;">
+                                <div class="card-header" style="border-bottom:none; margin-bottom:.5rem; padding-bottom:0;">Severity Gauge</div>
+                                <div style="height:180px;">
+                                    <canvas id="severity-gauge"></canvas>
+                                </div>
+                                <div id="severity-text" style="text-align:center; margin-top:.4rem; color:#94a3b8;">Score: N/A</div>
+                            </div>
+
+                            <div class="card" style="padding:0.85rem;">
+                                <div class="card-header" style="border-bottom:none; margin-bottom:.5rem; padding-bottom:0;">Recommendations</div>
+                                <div id="recommendations-list" style="min-height:64px;">
+                                    <p class="small-muted">Run a diagnosis to view tailored, educational recommendations.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Regional Data & Tabs -->
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-header"><i class="fas fa-map-marked-alt"></i> Regional Data and Analyzer</div>
+
+                <div class="tab-controls" role="tablist">
+                    <button class="tab-button active" onclick="showTab('india-hotspots')" role="tab">India Hotspots (Live COVID)</button>
+                    <button class="tab-button" onclick="showTab('global-trends')" role="tab">Global Trends</button>
+                    <button class="tab-button" onclick="showTab('data-analyzer')" role="tab">Data Analyzer (CSV)</button>
+                    <button class="tab-button" onclick="showTab('resource-planning')" role="tab">Resource Planning</button>
+                </div>
+
+                <!-- India Hotspots -->
+                <div id="india-hotspots" class="tab-content active" role="tabpanel">
+                    <div style="margin-bottom: 0.75rem;">
+                        <label for="hotspot-disease-select" style="font-weight: 500;">
+                            Select Disease for Hotspot View
+                        </label>
+                        <select id="hotspot-disease-select" onchange="updateHotspotData(this.value)" style="padding:0.5rem; border-radius:6px; border:1px solid #475569; background-color:#1e293b; color:var(--color-text); margin-top:0.5rem;">
+                            <option value="covid">COVID-19 (Live API)</option>
+                            <option value="dengue">Dengue Fever (Backend)</option>
+                            <option value="malaria">Malaria (Backend)</option>
+                            <option value="chikungunya">Chikungunya (Backend)</option>
+                            <option value="h1n1">H1N1 (Backend)</option>
+                        </select>
+                    </div>
+
+                    <div class="map-container">
+                        <div id="india-map"></div>
+                        <div class="india-map-legend">
+                            <div class="legend-badges">
+                                <span class="legend-pill"><span class="legend-swatch" style="background:var(--color-danger);"></span> High active burden</span>
+                                <span class="legend-pill"><span class="legend-swatch" style="background:var(--color-warning);"></span> Medium</span>
+                                <span class="legend-pill"><span class="legend-swatch" style="background:var(--color-success);"></span> Low</span>
+                                <span class="legend-pill"><span class="legend-swatch" style="background:#4b5563;"></span> No data</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Region (State/UT)</th>
+                                <th>Current Risk Level</th>
+                                <th>Active Cases (Latest)</th>
+                                <th>New Cases (24h)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="hotspot-table-body"></tbody>
+                    </table>
+                </div>
+
+                <!-- Global Trends -->
+                <div id="global-trends" class="tab-content" role="tabpanel">
+                    <div class="chart-container" style="height:420px;">
+                        <canvas id="global-trend-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- CSV Analyzer -->
+                <div id="data-analyzer" class="tab-content" role="tabpanel">
+                    <input type="file" id="csv-file-input" accept=".csv" onchange="handleFileUpload(event)">
+                    <div id="analysis-results" style="display:none;">
+                        <div id="report-content"></div>
+                    </div>
+                </div>
+
+                <!-- Resource Planning -->
+                <div id="resource-planning" class="tab-content" role="tabpanel">
+                    <h3 style="color: var(--color-secondary); margin-top: 0;"><i class="fas fa-truck-medical"></i> Emergency Resource Forecaster</h3>
+                    <p style="color: #94a3b8; margin-bottom: 1rem;">Uses epidemic forecasts from your backend plus local capacity inputs to estimate stress on beds and ventilators.</p>
+
+                    <div class="resource-planning-grid" style="display:grid; grid-template-columns:1fr 2fr; gap:12px;">
+                        <div class="resource-input">
+                            <h4 style="color: var(--color-text); margin-top: 0; border-bottom: 1px solid #334155; padding-bottom: 0.5rem;"><i class="fas fa-cogs"></i> Input Parameters</h4>
+                            
+                            <label for="beds-available" style="display:block; margin-top:.5rem; font-weight:500;">Current Hospital Bed Capacity</label>
+                            <input type="number" id="beds-available" value="5000" min="0" style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid #475569; background:#1e293b; color:white; margin-top:.25rem;" />
+
+                            <label for="icu-occupancy" style="display:block; margin-top:.5rem; font-weight:500;">Current ICU Occupancy (%)</label>
+                            <input type="number" id="icu-occupancy" value="65" min="0" max="100" style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid #475569; background:#1e293b; color:white; margin-top:.25rem;" />
+
+                            <label for="vent-inventory" style="display:block; margin-top:.5rem; font-weight:500;">Existing Ventilator Inventory</label>
+                            <input type="number" id="vent-inventory" value="300" min="0" style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid #475569; background:#1e293b; color:white; margin-top:.25rem;" />
+
+                            <label for="forecast-duration" style="display:block; margin-top:.5rem; font-weight:500;">Forecast Duration (Days)</label>
+                            <select id="forecast-duration" style="width:100%; padding:0.5rem; border-radius:6px; border:1px solid #475569; background:#1e293b; color:white; margin-top:.25rem;">
+                                <option value="30">30 Days</option>
+                                <option value="60">60 Days</option>
+                                <option value="90" selected>90 Days</option>
+                                <option value="180">180 Days</option>
+                            </select>
+
+                            <button onclick="runResourceForecast()" class="btn-primary" style="width:100%; margin-top:1rem; display:inline-flex; align-items:center; justify-content:center; gap:.5rem; padding:.65rem;">
+                                <i class="fas fa-clipboard-check"></i> Generate Forecast
+                            </button>
+                        </div>
+
+                        <div class="resource-output" style="padding:1rem; border-left:5px solid var(--color-warning); background:#1e293b; border-radius:8px;">
+                            <h4 style="color: var(--color-text); margin-top: 0; border-bottom: 1px solid #334155; padding-bottom: 0.25rem;"><i class="fas fa-chart-pie"></i> Projected Demand</h4>
+                            <div id="resource-forecast-output">
+                                <p style="color: #94a3b8; text-align: center; padding-top: 1rem;">Click "Generate Forecast" to simulate demand based on the active disease model.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        EpiSpot &copy; 2024. Data from public APIs + your backend. Educational use only.
+    </footer>
+
+    <!-- Custom Scripts -->
+    <script src="src/api.js?v=1.0.4"></script>
+    <script src="src/app.js?v=1.0.4"></script>
+</body>
+</html>

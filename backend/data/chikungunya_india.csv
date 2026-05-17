@@ -1,0 +1,36 @@
+state_code,state,active,delta,risk
+KA,Karnataka,3240,240,HIGH
+MH,Maharashtra,2890,195,HIGH
+TG,Telangana,2410,160,HIGH
+AP,Andhra Pradesh,1980,120,MEDIUM
+TN,Tamil Nadu,1850,110,MEDIUM
+KL,Kerala,1420,85,MEDIUM
+DL,Delhi,1120,70,MEDIUM
+GJ,Gujarat,940,55,LOW
+WB,West Bengal,880,50,LOW
+MP,Madhya Pradesh,720,40,LOW
+UP,Uttar Pradesh,650,35,LOW
+RJ,Rajasthan,510,25,LOW
+CT,Chhattisgarh,390,18,LOW
+JH,Jharkhand,290,12,LOW
+OR,Odisha,310,15,LOW
+PB,Punjab,180,8,LOW
+HR,Haryana,150,6,LOW
+AS,Assam,210,10,LOW
+AR,Arunachal Pradesh,80,3,LOW
+ML,Meghalaya,60,2,LOW
+MN,Manipur,55,2,LOW
+MZ,Mizoram,45,1,LOW
+NL,Nagaland,35,1,LOW
+SK,Sikkim,20,1,LOW
+TR,Tripura,50,2,LOW
+UT,Uttarakhand,90,4,LOW
+HP,Himachal Pradesh,70,3,LOW
+GA,Goa,110,5,LOW
+JK,Jammu and Kashmir,60,2,LOW
+LA,Ladakh,5,0,LOW
+AN,Andaman and Nicobar Islands,25,1,LOW
+CH,Chandigarh,65,3,LOW
+DN,Dadra and Nagar Haveli and Daman and Diu,15,0,LOW
+LD,Lakshadweep,8,0,LOW
+PY,Puducherry,95,5,LOW
