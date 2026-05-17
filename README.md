@@ -1,16 +1,5 @@
 # 🛡️ EpiSpot: Next-Generation Epidemic Surveillance & Predictive Forecaster
 
-```text
-    ______      _ _____            _   
-   |  ____|    (_)  __ \          | |  
-   | |__   _ __  | |__) |___ _ __ | |_ 
-   |  __| | '_ \| |  ___/ __| '_ \| __|
-   | |____| |_) | | |   \__ \ |_) | |_ 
-   |______| .__/|_|_|   |___/ .__/ \__|
-          | |               | |        
-          |_|               |_|        
-```
-
 EpiSpot is a premium, full-stack, enterprise-grade epidemiological surveillance dashboard and predictive forecasting suite. Designed with a gorgeous, high-contrast dark dashboard theme, it bridges the gap between active public health data reporting, real-time machine learning symptom mapping, and mathematical compartmental epidemic projections.
 
 ---
