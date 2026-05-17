@@ -1,4 +1,4 @@
-name: EpiSpot Continuous Integration
+name: EpiSpot Enterprise CI/CD Pipeline
 
 on:
   push:
@@ -7,9 +7,12 @@ on:
     branches: [ main, master ]
 
 jobs:
-  test:
+  # --------------------------------------------------
+  # JOB 1: CODE QUALITY & STYLE LINTERS
+  # --------------------------------------------------
+  lint:
+    name: Code Quality & Style Audit
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout Code
       uses: actions/checkout@v3
@@ -18,13 +21,90 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
+
+    - name: Install Linting Tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8
+
+    - name: Lint Syntax & Programmatic Errors (Flake8)
+      run: |
+        # stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # exit-zero treats all other PEP8 violations as warnings (non-breaking)
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+  # --------------------------------------------------
+  # JOB 2: SECURITY SCANNER & STATIC AUDIT
+  # --------------------------------------------------
+  security:
+    name: Security Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install Security Tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit
+
+    - name: Run Bandit Security Analysis
+      run: |
+        # Scan backend recursive, ignore virtualenv folders
+        bandit -r backend -x backend/venv -ll
+
+  # --------------------------------------------------
+  # JOB 3: MULTI-VERSION TESTING MATRIX
+  # --------------------------------------------------
+  test:
+    name: Core Suite Matrix Test (Python ${{ matrix.python-version }})
+    needs: [lint, security]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11']
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
         cache: 'pip'
 
-    - name: Install Dependencies
+    - name: Install Consolidated Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Run Backend Diagnostic Suite
+    - name: Execute Backend Diagnostic Suite
       run: |
         python backend/deep_test.py
+
+  # --------------------------------------------------
+  # JOB 4: DOCKER CONTAINER BUILD VERIFICATION
+  # --------------------------------------------------
+  docker-build:
+    name: Container Build Verification
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Verify Backend Container Build
+      run: |
+        docker build -t epispot-backend:test ./backend
+
+    - name: Verify Frontend Nginx Container Build
+      run: |
+        docker build -t epispot-frontend:test ./frontend
