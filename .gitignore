@@ -40,6 +40,9 @@ backend/symptom_ml/id2label.json.tmp
 backend/server_log.txt
 backend/server_err.txt
 
+# Local Journey Logs (DO NOT PUSH)
+journey.md
+
 # Node / JS
 node_modules/
 npm-debug.log*
