@@ -9,33 +9,22 @@ echo.
 
 cd /d "%~dp0"
 
-:: Detect virtualenv
-set VENV_PATH=""
+:: Detect Python Environment (System or VirtualEnv)
+set USE_VENV=0
 if exist ".venv\Scripts\activate.bat" (
-    set VENV_PATH=".venv"
+    set USE_VENV=1
+    set VENV_CMD=call .venv\Scripts\activate.bat
 ) else if exist "backend\venv\Scripts\activate.bat" (
-    set VENV_PATH="backend\venv"
-)
-
-if %VENV_PATH% == "" (
-    echo [WARN] Python Virtual Environment not found!
-    echo Attempting to automatically set up by running INSTALL.bat...
-    echo.
-    call INSTALL.bat
-    if not exist ".venv\Scripts\activate.bat" (
-        echo [ERROR] Automatic setup failed. Please run INSTALL.bat manually.
-        pause
-        exit /b 1
-    )
-    set VENV_PATH=".venv"
+    set USE_VENV=1
+    set VENV_CMD=call backend\venv\Scripts\activate.bat
 )
 
 echo [1/2] Starting EpiSpot Consolidated Server (FastAPI)...
 :: Start consolidated Uvicorn server in a new command window
-if %VENV_PATH% == ".venv" (
-    start "EpiSpot Server" cmd /k "call .venv\Scripts\activate.bat && cd backend && python -m uvicorn main:app --reload --port 8080"
+if %USE_VENV% == 1 (
+    start "EpiSpot Server" cmd /k "%VENV_CMD% && cd backend && python -m uvicorn main:app --reload --port 8080"
 ) else (
-    start "EpiSpot Server" cmd /k "cd backend && call venv\Scripts\activate.bat && python -m uvicorn main:app --reload --port 8080"
+    start "EpiSpot Server" cmd /k "cd backend && python -m uvicorn main:app --reload --port 8080"
 )
 
 echo [2/2] Launching Dashboard in your browser...

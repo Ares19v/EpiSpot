@@ -10,16 +10,16 @@ echo.
 cd /d "%~dp0"
 
 echo [1/2] Starting EpiSpot Consolidated Server (FastAPI)...
-:: Check if venv exists
-if not exist "backend\venv\Scripts\activate.bat" (
-    echo [ERROR] Backend virtual environment not found!
-    echo Please run test_all.bat first to diagnose.
-    pause
-    exit /b 1
+:: Check if venv exists, otherwise use system python
+set VENV_CMD=
+if exist "backend\venv\Scripts\activate.bat" (
+    set VENV_CMD=call backend\venv\Scripts\activate.bat ^&^& 
+) else if exist ".venv\Scripts\activate.bat" (
+    set VENV_CMD=call .venv\Scripts\activate.bat ^&^& 
 )
 
 :: Start consolidated Uvicorn server in a new window
-start "EpiSpot Server" cmd /k "cd backend && venv\Scripts\activate && python -m uvicorn main:app --reload --port 8080"
+start "EpiSpot Server" cmd /k "%VENV_CMD% cd backend && python -m uvicorn main:app --reload --port 8080"
 
 echo [2/2] Launching Dashboard in your browser...
 echo Waiting for server to initialize...

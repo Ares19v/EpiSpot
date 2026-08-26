@@ -17,13 +17,23 @@ echo [PASS] Core files found.
 
 echo.
 echo [CHECK] Verifying Python Environment...
-if not exist "backend\venv\Scripts\python.exe" echo [FAIL] backend venv missing or broken && exit /b 1
-echo [PASS] Venv is healthy.
+set PYTHON_EXE=python
+if exist "backend\venv\Scripts\python.exe" (
+    set PYTHON_EXE=backend\venv\Scripts\python.exe
+) else if exist ".venv\Scripts\python.exe" (
+    set PYTHON_EXE=.venv\Scripts\python.exe
+)
+%PYTHON_EXE% --version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [FAIL] Python not found in system or venv
+    exit /b 1
+)
+echo [PASS] Python environment is healthy.
 
 echo.
 echo [CHECK] Running Deep Logic Validation...
 cd backend
-venv\Scripts\python.exe deep_test.py
+%PYTHON_EXE% deep_test.py
 if %errorlevel% neq 0 (
     echo.
     echo [FAIL] Feature-level logic verification failed!
@@ -36,7 +46,7 @@ echo [PASS] All backend features (AI Diagnosis, Hotspots, Forecasts) verified.
 echo.
 echo [CHECK] Testing Consolidated Web Server...
 echo (Starting temporary instance on port 8999...)
-start /b "" venv\Scripts\uvicorn.exe main:app --port 8999 > nul 2>&1
+start /b "" %PYTHON_EXE% -m uvicorn main:app --port 8999 > nul 2>&1
 ping 127.0.0.1 -n 7 > nul
 curl -s http://localhost:8999/index.html | findstr "<title>"
 if %errorlevel% neq 0 (
