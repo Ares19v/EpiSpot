@@ -1,3 +1,5 @@
+[![CI](https://github.com/Ares19v/EpiSpot/actions/workflows/ci.yml/badge.svg)](https://github.com/Ares19v/EpiSpot/actions/workflows/ci.yml)
+
 # 🛡️ EpiSpot: Next-Generation Epidemic Surveillance & Predictive Forecaster
 
 EpiSpot is a premium, full-stack, full-scale epidemiological surveillance dashboard and predictive forecasting suite. Designed with a gorgeous, high-contrast dark dashboard theme, it bridges the gap between active public health data reporting, real-time machine learning symptom mapping, and mathematical compartmental epidemic projections.
