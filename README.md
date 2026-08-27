@@ -125,12 +125,6 @@ This triggers Python environment health checks, logic validations, and executes 
 
 ---
 
-## 📜 License & Copyright
+© 2025 Devansh Tyagi (Ares19v). All Rights Reserved.
 
-EpiSpot is open-source software licensed under the **[MIT License](file:///c:/Users/Devansh%20Tyagi/Desktop/Projects/EpiSpot/LICENSE)**.  
-Copyright (c) 2026 **Devansh Tyagi**.
-
----
-<p align="center">
-  Made by Devansh Tyagi @ 2026
-</p>
+Unauthorized copying, modification, distribution, or use of this project or any of its components, in whole or in part, without explicit written permission from the author is strictly prohibited.
