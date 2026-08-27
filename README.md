@@ -1,6 +1,6 @@
 # 🛡️ EpiSpot: Next-Generation Epidemic Surveillance & Predictive Forecaster
 
-EpiSpot is a premium, full-stack, enterprise-grade epidemiological surveillance dashboard and predictive forecasting suite. Designed with a gorgeous, high-contrast dark dashboard theme, it bridges the gap between active public health data reporting, real-time machine learning symptom mapping, and mathematical compartmental epidemic projections.
+EpiSpot is a premium, full-stack, full-scale epidemiological surveillance dashboard and predictive forecasting suite. Designed with a gorgeous, high-contrast dark dashboard theme, it bridges the gap between active public health data reporting, real-time machine learning symptom mapping, and mathematical compartmental epidemic projections.
 
 ---
 
@@ -99,7 +99,7 @@ Where:
 
 ### Option B: Docker Containerized Orchestration
 
-To run the application inside a fully isolated, production-grade container stack:
+To run the application inside a fully isolated, high-performance container stack:
 
 1. **Build and Spin Up Containers**:
    ```bash
